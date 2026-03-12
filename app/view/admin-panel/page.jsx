@@ -5,13 +5,17 @@ import { useRouter } from "next/navigation";
 import AuthGuard from "../../components/AuthGuard";
 import Sidebar from "../../components/Sidebar";
 import TopNavbar from "../../components/TopNavbar";
-import { ShieldCheck, Settings, ArrowRight, PencilLine } from "lucide-react";
+import { ShieldCheck, Settings, ArrowRight, PencilLine, Users, Bell, RefreshCw } from "lucide-react";
 import { useAuth } from "../../hook/useAuth";
 import { isAdminRole } from "../../utils/roleHelper";
 
 export default function AdminPanelPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
+  const [showAccessRequests, setShowAccessRequests] = useState(false);
+  const [accessRequests, setAccessRequests] = useState([]);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [loadingRequests, setLoadingRequests] = useState(false);
   const { role, loading } = useAuth();
   const router = useRouter();
 
@@ -44,7 +48,85 @@ export default function AdminPanelPage() {
     );
   }
 
+  // Access requests functions
+  const loadAccessRequests = async () => {
+    setLoadingRequests(true);
+    try {
+      const response = await fetch('/api/auth/request-access?status=pending');
+      const data = await response.json();
+      if (data.requests) {
+        setAccessRequests(data.requests);
+        setPendingCount(data.requests.length);
+      }
+    } catch (error) {
+      console.error('Error loading access requests:', error);
+    } finally {
+      setLoadingRequests(false);
+    }
+  };
+
+  const createMockRequest = async () => {
+    try {
+      const response = await fetch('/api/auth/request-access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Test User',
+          email: 'test@example.com',
+          role: 'staff',
+          reason: 'Test request from admin panel'
+        })
+      });
+      if (response.ok) {
+        loadAccessRequests();
+      }
+    } catch (error) {
+      console.error('Error creating mock request:', error);
+    }
+  };
+
+  const approveRequest = async (requestId) => {
+    try {
+      const response = await fetch('/api/auth/request-access', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: requestId, action: 'approve' })
+      });
+      if (response.ok) {
+        loadAccessRequests();
+      }
+    } catch (error) {
+      console.error('Error approving request:', error);
+    }
+  };
+
+  const declineRequest = async (requestId) => {
+    try {
+      const response = await fetch('/api/auth/request-access', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: requestId, action: 'reject' })
+      });
+      if (response.ok) {
+        loadAccessRequests();
+      }
+    } catch (error) {
+      console.error('Error declining request:', error);
+    }
+  };
+
   const adminActions = [
+    {
+      title: "Access Requests Management",
+      description: `Review and approve user access requests. ${pendingCount > 0 ? `(${pendingCount} pending)` : 'No pending requests'}`,
+      onClick: () => {
+        setShowAccessRequests(true);
+        loadAccessRequests();
+      },
+      icon: Bell,
+      color: "blue",
+      badge: pendingCount > 0 ? pendingCount : null
+    },
     {
       title: "System Inventory Status",
       description: "Manage inventory records and export/delete controls.",
@@ -113,7 +195,7 @@ export default function AdminPanelPage() {
                 <button
                   key={action.title}
                   type="button"
-                  onClick={() => router.push(action.path)}
+                  onClick={action.onClick ? action.onClick : () => router.push(action.path)}
                   className={`text-left rounded-xl border p-5 transition-all hover:scale-[1.01] ${
                     darkMode
                       ? "bg-[#1F2937] border-[#374151] hover:bg-[#374151]"
@@ -121,7 +203,18 @@ export default function AdminPanelPage() {
                   }`}
                 >
                   <div className="flex items-center justify-between mb-3">
-                    <Settings className="w-5 h-5 text-[#2563EB]" />
+                    {action.icon ? (
+                      <div className="relative">
+                        <action.icon className={`w-5 h-5 ${action.color === 'blue' ? 'text-blue-500' : 'text-[#2563EB]'}`} />
+                        {action.badge && (
+                          <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+                            {action.badge}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <Settings className="w-5 h-5 text-[#2563EB]" />
+                    )}
                     <ArrowRight className="w-4 h-4" />
                   </div>
                   <h2 className="font-semibold mb-1">{action.title}</h2>
@@ -156,6 +249,101 @@ export default function AdminPanelPage() {
                 system-level actions and restricted edits.
               </p>
             </div>
+
+            {/* Access Requests Section - Inline */}
+            {showAccessRequests && (
+              <div className={`rounded-xl border p-6 mt-6 ${
+                darkMode
+                  ? "bg-[#1F2937] border-[#374151]"
+                  : "bg-white border-[#E5E7EB]"
+              }`}>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <Bell className="w-6 h-6 text-blue-500" />
+                    <h2 className="text-xl font-bold">Access Requests</h2>
+                    {pendingCount > 0 && (
+                      <span className="bg-red-500 text-white px-2 py-1 rounded-full text-sm">
+                        {pendingCount} pending
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={createMockRequest}
+                      className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
+                    >
+                      🧪 Create Test
+                    </button>
+                    <button
+                      onClick={loadAccessRequests}
+                      className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setShowAccessRequests(false)}
+                      className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+
+                {loadingRequests ? (
+                  <div className="text-center py-8">
+                    <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                    <p className="mt-2 text-sm text-gray-500">Loading requests...</p>
+                  </div>
+                ) : accessRequests.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500">No pending access requests</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {accessRequests.map((request) => (
+                      <div
+                        key={request.id}
+                        className={`p-4 rounded-lg border ${
+                          darkMode
+                            ? "bg-[#374151] border-[#4B5563]"
+                            : "bg-gray-50 border-gray-200"
+                        }`}
+                      >
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <h3 className="font-semibold">{request.name}</h3>
+                            <p className="text-sm text-gray-500">{request.email}</p>
+                            <p className="text-sm text-gray-500">Role: {request.role}</p>
+                            {request.reason && (
+                              <p className="text-sm mt-2 text-gray-600">{request.reason}</p>
+                            )}
+                          </div>
+                          <div className="flex flex-col items-end gap-2">
+                            <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs">
+                              Pending
+                            </span>
+                            <div className="flex gap-2 mt-2">
+                              <button
+                                onClick={() => approveRequest(request.id)}
+                                className="px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600 transition-colors"
+                              >
+                                ✓ Approve
+                              </button>
+                              <button
+                                onClick={() => declineRequest(request.id)}
+                                className="px-3 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 transition-colors"
+                              >
+                                ✗ Decline
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -14,6 +14,79 @@ import {
         PRODUCT IN CONTROLLER
 =====================================*/
 
+export const handleAddMultipleProductsIn = async (productsData) => {
+  if (!Array.isArray(productsData) || productsData.length === 0) {
+    return { success: false, message: "No products to add" };
+  }
+
+  const results = [];
+  const errors = [];
+
+  for (const product of productsData) {
+    const { product_name, quantity, date, time_in, components, meta = {}, options = {} } = product;
+    
+    if (!product_name || !quantity) {
+      errors.push({ product: product_name || 'Unknown', error: "Missing required fields" });
+      continue;
+    }
+
+    const formattedComponents = Array.isArray(components)
+      ? components
+      : JSON.parse(components || "[]");
+
+    const stockResult = await reserveComponentsFromStock({
+      components: formattedComponents,
+      date,
+      time_out: time_in,
+      allowAlternatives: Boolean(options.allowAlternatives),
+    });
+
+    if (!stockResult.success) {
+      errors.push({
+        product: product_name,
+        error: stockResult.message,
+        missingComponents: stockResult.missingComponents || [],
+        alternativeOptions: stockResult.alternativeOptions || [],
+      });
+      continue;
+    }
+
+    const result = await upsertProductIn({
+      product_name,
+      quantity,
+      date,
+      time_in,
+      components: formattedComponents,
+      shipping_mode: meta.shipping_mode || null,
+      client_name: meta.client_name || null,
+      description: meta.description || null,
+      price: meta.price,
+      category: meta.category || 'Others',
+    });
+
+    if (result?.__error || !result) {
+      errors.push({ product: product_name, error: result?.__error || "Error adding product" });
+    } else {
+      results.push({
+        product: product_name,
+        success: true,
+        data: result,
+        usedAlternatives: stockResult.usedAlternatives || [],
+        deductedComponents: stockResult.stockDeductions || [],
+      });
+    }
+  }
+
+  return {
+    success: errors.length === 0,
+    results,
+    errors,
+    message: errors.length === 0 
+      ? `Successfully added ${results.length} products`
+      : `Added ${results.length} products with ${errors.length} errors`,
+  };
+};
+
 // ADD / UPDATE PRODUCT IN
 export const handleAddProductIn = async (
   product_name,
@@ -62,6 +135,7 @@ export const handleAddProductIn = async (
     client_name: meta.client_name || null,
     description: meta.description || null,
     price: meta.price,
+    category: meta.category || 'Others',
   });
 
   if (result?.__error) {

@@ -17,6 +17,7 @@ export const fetchParcelOutItems = async () => {
       shipping_mode: item.shipping_mode,
       client_name: item.client_name,
       price: item.price,
+      category: item.category,
     }));
   } catch (err) {
     console.error(
@@ -38,6 +39,7 @@ export const addParcelOutItemHelper = async ({
   shipping_mode,
   client_name,
   price,
+  category,
 }) => {
   try {
     // Delegate validation and DB updates to server model via API
@@ -52,6 +54,7 @@ export const addParcelOutItemHelper = async ({
         price === "" || price === null || price === undefined
           ? null
           : Number(price),
+      category: category || 'Others',
     });
 
     // API should return the created parcel_out row
@@ -70,6 +73,7 @@ export const addParcelOutItemHelper = async ({
       shipping_mode: data.shipping_mode,
       client_name: data.client_name,
       price: data.price,
+      category: data.category,
     };
   } catch (err) {
     console.error("Error in addParcelOutItemHelper:", err.response?.data || err.message || err);
@@ -89,6 +93,7 @@ export const handleAddParcelOut = async ({
   shipping_mode,
   client_name,
   price,
+  category,
 }) => {
   const time_out = `${timeHour}:${timeMinute} ${timeAMPM}`;
   const newItem = await addParcelOutItemHelper({
@@ -99,6 +104,7 @@ export const handleAddParcelOut = async ({
     shipping_mode,
     client_name,
     price,
+    category,
   });
   if (!newItem) return null;
 

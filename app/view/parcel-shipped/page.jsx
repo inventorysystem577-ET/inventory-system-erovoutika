@@ -21,6 +21,7 @@ import {
 } from "../../utils/parcelShippedHelper";
 import AuthGuard from "../../components/AuthGuard";
 import { products } from "../../utils/productsData";
+import { CATEGORIES, CATEGORY_OPTIONS, getCategoryColor, getCategoryIcon } from "../../utils/categoryUtils";
 
 export default function Page() {
   const searchParams = useSearchParams();
@@ -39,8 +40,17 @@ export default function Page() {
   const [shippingMode, setShippingMode] = useState("");
   const [clientName, setClientName] = useState("");
   const [price, setPrice] = useState("");
+  const [category, setCategory] = useState(CATEGORIES.OTHERS);
   const [itemSuggestions, setItemSuggestions] = useState([]);
   const computedTotalPrice = (Number(price) || 0) * (Number(quantity) || 0);
+
+  // Calculate unique items (count of distinct item names)
+  const getUniqueItemCount = (itemsList) => {
+    const uniqueNames = new Set(itemsList.map(item => item.name).filter(Boolean));
+    return uniqueNames.size;
+  };
+
+  const uniqueItemCount = getUniqueItemCount(items);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(5);
@@ -116,6 +126,7 @@ export default function Page() {
       shipping_mode: shippingMode,
       client_name: clientName,
       price: computedTotalPrice,
+      category: category,
     });
     if (!result || !result.newItem) return;
 
@@ -135,6 +146,7 @@ export default function Page() {
     setShippingMode("");
     setClientName("");
     setPrice("");
+    setCategory(CATEGORIES.OTHERS);
     alert("Stock In recorded successfully.");
   };
 
@@ -399,7 +411,33 @@ export default function Page() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-4">
+                {/* Category */}
+                <div>
+                  <label
+                    className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
+                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
+                    }`}
+                  >
+                    <Package className="w-4 h-4" /> Category
+                  </label>
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className={`border rounded-lg px-4 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
+                      darkMode
+                        ? "border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white"
+                        : "border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                    }`}
+                    required
+                  >
+                    {CATEGORY_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div>
                   <label
                     className={`text-sm font-medium mb-2 ${
@@ -490,7 +528,10 @@ export default function Page() {
               }`}
             >
               <div className="font-medium">
-                Total Items: <span className="font-bold">{items.length}</span>
+                Unique Items: <span className="font-bold">{uniqueItemCount}</span>
+              </div>
+              <div className="font-medium">
+                Total Records: <span className="font-bold">{items.length}</span>
               </div>
               <div className="font-medium">
                 Total Quantity:{" "}
@@ -520,6 +561,7 @@ export default function Page() {
                     <tr>
                       {[
                         "ITEM NAME",
+                        "CATEGORY",
                         "DATE",
                         "QUANTITY",
                         "TIME IN",
@@ -546,7 +588,7 @@ export default function Page() {
                     {currentItems.length === 0 ? (
                       <tr>
                         <td
-                          colSpan="7"
+                          colSpan="8"
                           className={`text-center p-8 sm:p-12 ${
                             darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"
                           } animate__animated animate__fadeIn`}
@@ -577,6 +619,14 @@ export default function Page() {
                         >
                           <td className="p-3 sm:p-4 font-semibold text-sm sm:text-base whitespace-nowrap text-center align-middle">
                             {item.name}
+                          </td>
+                          <td className="p-3 sm:p-4 text-center align-middle">
+                            <span
+                              className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${getCategoryColor(item.category)}`}
+                            >
+                              <span className="mr-1">{getCategoryIcon(item.category)}</span>
+                              {item.category || 'Others'}
+                            </span>
                           </td>
                           <td className="p-3 sm:p-4 text-sm sm:text-base whitespace-nowrap text-center align-middle">
                             {item.date}

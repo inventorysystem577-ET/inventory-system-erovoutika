@@ -15,24 +15,18 @@ import { handleSubmitRegister } from "../../controller/registerController";
 export default function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [role, setRole] = useState("");
+  const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(false);
 
   const onSubmit = (e) => {
-    if (password !== confirmPassword) {
-      alert("Passwords do not match");
-      return;
-    }
-
     handleFormSubmit({
       e,
       controllerFn: handleSubmitRegister,
-      data: { name, email, password, role },
+      data: { name, email, role, reason },
       setLoading,
       onSuccess: (response) => {
-        alert(response.message || "Account Created successfully!");
+        alert(response.message || "Access request submitted successfully! Your request will be reviewed by an admin.");
         window.location.href = "/";
       },
       onError: (error) => alert(error.message),
@@ -72,12 +66,10 @@ export default function RegisterPage() {
               setName={setName}
               email={email}
               setEmail={setEmail}
-              password={password}
-              setPassword={setPassword}
-              confirmPassword={confirmPassword}
-              setConfirmPassword={setConfirmPassword}
               role={role}
               setRole={setRole}
+              reason={reason}
+              setReason={setReason}
               onSubmit={onSubmit}
               loading={loading}
             />

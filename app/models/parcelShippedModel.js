@@ -11,6 +11,7 @@ export const addParcelInItem = async (item) => {
     price: item.price === "" || item.price === null || item.price === undefined
       ? null
       : Number(item.price),
+    category: item.category || 'Others',
   };
 
   const { data, error } = await supabase

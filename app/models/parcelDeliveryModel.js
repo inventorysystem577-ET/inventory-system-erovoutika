@@ -8,6 +8,7 @@ export const addParcelOutItem = async ({
   shipping_mode,
   client_name,
   price,
+  category,
 }) => {
   try {
     // Check available stock across all matching stock-in rows
@@ -44,6 +45,7 @@ export const addParcelOutItem = async ({
             price === "" || price === null || price === undefined
               ? null
               : Number(price),
+          category: category || 'Others',
         },
       ])
       .select()

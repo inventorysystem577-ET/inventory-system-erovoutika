@@ -14,6 +14,7 @@ export const fetchParcelItems = async () => {
       shipping_mode: item.shipping_mode,
       client_name: item.client_name,
       price: item.price,
+      category: item.category,
     }));
   } catch (err) {
     console.error(err);
@@ -30,6 +31,7 @@ export const addParcelItem = async ({
   shipping_mode,
   client_name,
   price,
+  category,
 }) => {
   try {
     const res = await axios.post("/api/parcelShipped", {
@@ -43,6 +45,7 @@ export const addParcelItem = async ({
         price === "" || price === null || price === undefined
           ? null
           : Number(price),
+      category: category || 'Others',
     });
     const data = res.data;
     return {
@@ -54,6 +57,7 @@ export const addParcelItem = async ({
       shipping_mode: data.shipping_mode,
       client_name: data.client_name,
       price: data.price,
+      category: data.category,
     };
   } catch (err) {
     console.error(err.response?.data || err.message);
@@ -72,6 +76,7 @@ export const handleAddParcelIn = async ({
   shipping_mode,
   client_name,
   price,
+  category,
 }) => {
   const timeString = `${timeHour}:${timeMinute} ${timeAMPM}`;
   const newItem = await addParcelItem({
@@ -82,6 +87,7 @@ export const handleAddParcelIn = async ({
     shipping_mode,
     client_name,
     price,
+    category,
   });
   if (!newItem) return null;
 

@@ -12,6 +12,7 @@ import {
   handleAddParcelOut,
 } from "../../utils/parcelOutHelper";
 import { fetchParcelItems } from "../../utils/parcelShippedHelper";
+import { CATEGORIES, CATEGORY_OPTIONS, getCategoryColor, getCategoryIcon } from "../../utils/categoryUtils";
 
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -28,8 +29,17 @@ export default function Page() {
   const [shippingMode, setShippingMode] = useState("");
   const [clientName, setClientName] = useState("");
   const [price, setPrice] = useState("");
+  const [category, setCategory] = useState(CATEGORIES.OTHERS);
   const [selectedFilter, setSelectedFilter] = useState("");
   const computedTotalPrice = (Number(price) || 0) * (Number(quantity) || 0);
+
+  // Calculate unique items (count of distinct item names)
+  const getUniqueItemCount = (itemsList) => {
+    const uniqueNames = new Set(itemsList.map(item => item.name).filter(Boolean));
+    return uniqueNames.size;
+  };
+
+  const uniqueOutItemCount = getUniqueItemCount(items);
 
   const selectedItem = availableItems.find(
     (item) => item.name === selectedItemId,
@@ -104,6 +114,7 @@ export default function Page() {
       shipping_mode: shippingMode,
       client_name: clientName,
       price: computedTotalPrice,
+      category: category,
     });
 
     if (!result || !result.newItem) return;
@@ -126,6 +137,7 @@ export default function Page() {
     setShippingMode("");
     setClientName("");
     setPrice("");
+    setCategory(CATEGORIES.OTHERS);
   };
 
   const filteredItems = selectedFilter
@@ -321,6 +333,13 @@ export default function Page() {
                       {maxQuantity})
                     </p>
                   )}
+                  {selectedItemId && (
+                    <p
+                      className={`text-xs mt-1 ${darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"}`}
+                    >
+                      Unique Items Available: {availableItems.length} different types
+                    </p>
+                  )}
                 </div>
 
                 {/* Time Out */}
@@ -382,7 +401,33 @@ export default function Page() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                {/* Category */}
+                <div className="flex flex-col">
+                  <label
+                    className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
+                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
+                    }`}
+                  >
+                    <Package className="w-4 h-4" /> Category
+                  </label>
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className={`border rounded-lg px-3 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
+                      darkMode
+                        ? "border-[#374151] focus:ring-[#F97316] focus:border-[#F97316] bg-[#111827] text-white"
+                        : "border-[#D1D5DB] focus:ring-[#EA580C] focus:border-[#EA580C] bg-white text-black"
+                    }`}
+                    required
+                  >
+                    {CATEGORY_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div className="flex flex-col">
                   <label
                     className={`text-sm font-medium mb-2 ${
@@ -497,6 +542,25 @@ export default function Page() {
               </select>
             </div>
 
+            {/* Stats */}
+            <div
+              className={`mb-6 flex justify-between p-4 rounded-lg shadow animate__animated animate__fadeInUp animate__fast ${
+                darkMode
+                  ? "bg-[#1F2937] text-white border border-[#374151]"
+                  : "bg-white text-[#111827] border border-[#E5E7EB]"
+              }`}
+            >
+              <div className="font-medium">
+                Unique Items Out: <span className="font-bold">{uniqueOutItemCount}</span>
+              </div>
+              <div className="font-medium">
+                Total Records: <span className="font-bold">{items.length}</span>
+              </div>
+              <div className="font-medium">
+                Available Types: <span className="font-bold">{availableItems.length}</span>
+              </div>
+            </div>
+
             {/* Table */}
             <div
               className={`rounded-xl shadow-lg overflow-hidden border animate__animated animate__fadeInDown ${
@@ -517,6 +581,7 @@ export default function Page() {
                     <tr>
                       {[
                         "Item Name",
+                        "Category",
                         "Date",
                         "Quantity",
                         "Time Out",
@@ -545,7 +610,7 @@ export default function Page() {
                     {filteredItems.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={7}
+                          colSpan={8}
                           className={`px-4 sm:px-6 py-12 sm:py-16 text-center ${
                             darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"
                           }`}
@@ -580,6 +645,14 @@ export default function Page() {
                             }`}
                           >
                             {item.name}
+                          </td>
+                          <td className="px-4 sm:px-6 py-3 sm:py-4 text-center align-middle">
+                            <span
+                              className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${getCategoryColor(item.category)}`}
+                            >
+                              <span className="mr-1">{getCategoryIcon(item.category)}</span>
+                              {item.category || 'Others'}
+                            </span>
                           </td>
                           <td
                             className={`px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-center align-middle text-sm sm:text-base ${

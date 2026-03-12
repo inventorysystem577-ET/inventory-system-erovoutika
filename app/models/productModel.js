@@ -295,6 +295,7 @@ export const upsertProductIn = async (data) => {
     shipping_mode: data.shipping_mode || null,
     client_name: data.client_name || null,
     description: data.description || null,
+    category: data.category || 'Others',
     price:
       data.price === "" || data.price === null || data.price === undefined
         ? null

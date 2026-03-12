@@ -87,10 +87,10 @@ export default function LoginComponents({
       <p className="text-center text-sm text-gray-400 md:text-gray-600">
         Don’t have an account?{" "}
         <Link
-          href="/view/register"
+          href="/view/request-access"
           className="font-medium text-blue-400 md:text-blue-600 hover:text-blue-500 md:hover:text-blue-700"
         >
-          Register
+          Request Access
         </Link>
       </p>
     </form>
