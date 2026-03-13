@@ -21,11 +21,7 @@ import "animate.css";
 // Import controllers
 import {
   fetchProductInController,
-  clearProductInInventory,
-  clearProductOutHistory,
 } from "../../controller/productController";
-import { deleteAllParcelInItems } from "../../controller/parcelShipped";
-import { clearParcelOutHistory } from "../../controller/parcelDelivery";
 import { fetchParcelItems } from "../../utils/parcelShippedHelper";
 import { useAuth } from "../../hook/useAuth";
 import { isAdminRole } from "../../utils/roleHelper";
@@ -305,34 +301,6 @@ export default function Page() {
     setShowExportModal(false);
   };
 
-  const handleExportDeleteAndSave = async () => {
-    if (!isAdmin) {
-      setExportError("Only admin can delete inventory records.");
-      return;
-    }
-    setIsProcessingExport(true);
-    setExportError("");
-
-    const parcelSnapshot = [...parcelItems];
-    const productSnapshot = [...productItems];
-    exportToPDF(parcelSnapshot, productSnapshot);
-
-    const [parcelInResult, productInResult, parcelOutResult, productOutResult] =
-      await Promise.all([
-      deleteAllParcelInItems(),
-      clearProductInInventory(),
-      clearParcelOutHistory(),
-      clearProductOutHistory(),
-    ]);
-
-    const hasFailure = [parcelInResult, productInResult, parcelOutResult, productOutResult]
-      .some((result) => Boolean(result?.error) || result?.success === false);
-
-    if (hasFailure) {
-      setExportError("PDF saved, but failed to delete some inventory records.");
-      setIsProcessingExport(false);
-      return;
-    }
 
     setParcelItems([]);
     setProductItems([]);
@@ -1145,7 +1113,7 @@ export default function Page() {
                   darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"
                 }`}
               >
-                Delete all record in inventory then save PDF, or save PDF only?
+                Save the current inventory as a PDF file
               </p>
 
               {exportError && (
@@ -1161,18 +1129,6 @@ export default function Page() {
               )}
 
               <div className="flex flex-col sm:flex-row gap-2">
-                <button
-                  type="button"
-                  onClick={handleExportDeleteAndSave}
-                  disabled={isProcessingExport}
-                  className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium ${
-                    isProcessingExport
-                      ? "bg-gray-400 text-white cursor-not-allowed"
-                      : "bg-red-600 hover:bg-red-700 text-white"
-                  }`}
-                >
-                  Delete Inventory + Save PDF
-                </button>
                 <button
                   type="button"
                   onClick={handleExportPdfOnly}
