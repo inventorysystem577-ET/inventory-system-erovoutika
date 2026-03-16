@@ -47,13 +47,13 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen, darkMode }) {
         },
         {
           id: "Parcel Shipped",
-          label: "Components Stock In",
+          label: "Stock In",
           icon: Package,
           path: "/view/parcel-shipped",
         },
         {
           id: "Parcel Delivery",
-          label: "Components Stock Out",
+          label: "Stock Out",
           icon: PackageOpen,
           path: "/view/parcel-delivery",
         },
