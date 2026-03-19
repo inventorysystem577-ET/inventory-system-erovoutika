@@ -78,10 +78,10 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen, darkMode }) {
   const adminSubItems = isAdmin
     ? [
         {
-          id: "User Approvals",
-          label: "Admit Pending Users",
+          id: "User Management",
+          label: "User Management",
           icon: UserCheck,
-          path: "/view/user-approvals",
+          path: "/view/user-management",
         },
         {
           id: "Admin CRUD Products",
