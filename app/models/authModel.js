@@ -150,107 +150,6 @@ export async function updatePassword(password) {
   return data;
 }
 
-export async function approveAccessRequest(requestId, approvedBy) {
-  if (!requestId || !approvedBy) {
-    throw new Error("Request ID and approved by are required");
-  }
-
-  const now = new Date().toISOString();
-
-  const { data: request, error: requestFetchError } = await supabase
-    .from(PENDING_REQUESTS_TABLE)
-    .select("id, name, email, role")
-    .eq("id", requestId)
-    .maybeSingle();
-
-  if (requestFetchError) throw requestFetchError;
-  if (!request) throw new Error("Access request not found");
-
-  const { data: updatedRequest, error: requestUpdateError } = await supabase
-    .from(PENDING_REQUESTS_TABLE)
-    .update({
-      is_approved: true,
-      approved_at: now,
-      approved_by: approvedBy,
-      rejected_at: null,
-      rejected_by: null,
-    })
-    .eq("id", requestId)
-    .select()
-    .maybeSingle();
-
-  if (requestUpdateError) throw requestUpdateError;
-
-  const { data: updatedProfile, error: profileError } = await supabase
-    .from(APPROVED_USERS_TABLE)
-    .upsert(
-      {
-        id: requestId,
-        name: request.name,
-        email: request.email,
-        role: request.role,
-        is_approved: true,
-        rejected_at: null,
-      },
-      { onConflict: "id" },
-    )
-    .select()
-    .maybeSingle();
-
-  if (profileError) throw profileError;
-
-  return { request: updatedRequest, profile: updatedProfile };
-}
-
-export async function rejectAccessRequest(requestId, rejectedBy) {
-  if (!requestId || !rejectedBy) {
-    throw new Error("Request ID and rejected by are required");
-  }
-
-  const now = new Date().toISOString();
-
-  const { data: request, error: requestFetchError } = await supabase
-    .from(PENDING_REQUESTS_TABLE)
-    .select("id")
-    .eq("id", requestId)
-    .maybeSingle();
-
-  if (requestFetchError) throw requestFetchError;
-  if (!request) throw new Error("Access request not found");
-
-  const { data: updatedRequest, error: requestUpdateError } = await supabase
-    .from(PENDING_REQUESTS_TABLE)
-    .update({
-      is_approved: false,
-      approved_at: null,
-      approved_by: null,
-      rejected_at: now,
-      rejected_by: rejectedBy,
-    })
-    .eq("id", requestId)
-    .select()
-    .maybeSingle();
-
-  if (requestUpdateError) throw requestUpdateError;
-
-  const { data: updatedProfile, error: profileError } = await supabase
-    .from(APPROVED_USERS_TABLE)
-    .upsert(
-      {
-        id: requestId,
-        is_approved: false,
-        rejected_at: now,
-      },
-      { onConflict: "id" },
-    )
-    .select()
-    .maybeSingle();
-
-  if (profileError) throw profileError;
-
-  return { request: updatedRequest, profile: updatedProfile };
-}
-
 // ─────────────────────────────────────────────────────────────
 // User Management additions
 // ─────────────────────────────────────────────────────────────
@@ -324,8 +223,6 @@ export async function deleteUserProfile(id) {
   if (authError)
     console.warn(`Could not delete auth user ${id}:`, authError.message);
 }
-
-/** ================== **/
 
 export async function approveAccessRequest(requestId, approvedBy) {
   const now = new Date().toISOString();
