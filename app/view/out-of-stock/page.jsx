@@ -14,6 +14,7 @@ import {
   TrendingDown,
   XCircle,
   Package,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import "animate.css";
@@ -67,6 +68,11 @@ export default function Page() {
   const [productCategoryFilter, setProductCategoryFilter] = useState("all");
   const { role } = useAuth();
   const isAdmin = isAdminRole(role);
+
+  // New category product management
+  const [showNewCategoryModal, setShowNewCategoryModal] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryDescription, setNewCategoryDescription] = useState("");
 
   const parcelTableRef = useRef(null);
   const productTableRef = useRef(null);
@@ -349,6 +355,25 @@ export default function Page() {
     setIsProcessingExport(false);
   };
 
+  // Functions for new category management
+  const handleCreateNewCategory = () => {
+    if (!newCategoryName.trim()) {
+      alert("Please enter a category name");
+      return;
+    }
+    
+    // Here you would typically save to database
+    console.log("Creating new category:", {
+      name: newCategoryName,
+      description: newCategoryDescription
+    });
+    
+    alert(`New category "${newCategoryName}" created successfully!`);
+    setNewCategoryName("");
+    setNewCategoryDescription("");
+    setShowNewCategoryModal(false);
+  };
+
   return (
     <AuthGuard darkMode={darkMode}>
       <div
@@ -406,6 +431,19 @@ export default function Page() {
                 }`}
               >
                 Export as PDF
+              </button>
+
+              {/* Create New Category Button */}
+              <button
+                onClick={() => setShowNewCategoryModal(true)}
+                disabled={!isAdmin}
+                className={`px-6 py-3 rounded-lg text-sm font-medium transition-all duration-300 ${
+                  isAdmin
+                    ? "bg-gradient-to-r from-green-500 to-green-600 text-white hover:shadow-xl hover:scale-105 active:scale-95"
+                    : "bg-gray-400 text-white cursor-not-allowed"
+                }`}
+              >
+                Create New Category
               </button>
             </div>
 
@@ -476,20 +514,23 @@ export default function Page() {
               </div>
             )}
 
-            {/* ============= PARCEL SECTION ============= */}
+            {/* ============= UNIFIED INVENTORY STATUS SECTION ============= */}
             <div className="mb-8">
               <div className="flex items-center gap-2 mb-4">
                 <Package className="w-6 h-6 text-[#1e40af]" />
-                <h2 className="text-xl font-bold">Components Stock Status</h2>
+                <h2 className="text-xl font-bold">Inventory Status</h2>
               </div>
 
-              {/* Parcel Status Summary Cards */}
+              {/* Unified Status Summary Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                 {/* Out of Stock */}
                 <div
-                  onClick={() => setFilterParcelStatus("out")}
+                  onClick={() => {
+                    setFilterParcelStatus("out");
+                    setFilterProductStatus("out");
+                  }}
                   className={`p-3 sm:p-4 rounded-xl border cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-xl group ${
-                    filterParcelStatus === "out"
+                    (filterParcelStatus === "out" || filterProductStatus === "out")
                       ? "ring-2 ring-[#EF4444] shadow-[#EF4444]/30 shadow-lg scale-[1.03]"
                       : ""
                   } ${
@@ -514,14 +555,19 @@ export default function Page() {
                   >
                     Out of Stock
                   </p>
-                  <p className="text-2xl font-bold">{parcelStatusCounts.out}</p>
+                  <p className="text-2xl font-bold">
+                    {parcelStatusCounts.out + productStatusCounts.out}
+                  </p>
                 </div>
 
                 {/* Critical Level */}
                 <div
-                  onClick={() => setFilterParcelStatus("critical")}
+                  onClick={() => {
+                    setFilterParcelStatus("critical");
+                    setFilterProductStatus("critical");
+                  }}
                   className={`p-3 sm:p-4 rounded-xl border cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-xl group ${
-                    filterParcelStatus === "critical"
+                    (filterParcelStatus === "critical" || filterProductStatus === "critical")
                       ? "ring-2 ring-[#F97316] shadow-[#F97316]/30 shadow-lg scale-[1.03]"
                       : ""
                   } ${
@@ -547,15 +593,18 @@ export default function Page() {
                     Critical Level
                   </p>
                   <p className="text-2xl font-bold">
-                    {parcelStatusCounts.critical}
+                    {parcelStatusCounts.critical + productStatusCounts.critical}
                   </p>
                 </div>
 
                 {/* Low Stock */}
                 <div
-                  onClick={() => setFilterParcelStatus("low")}
+                  onClick={() => {
+                    setFilterParcelStatus("low");
+                    setFilterProductStatus("low");
+                  }}
                   className={`p-3 sm:p-4 rounded-xl border cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-xl group ${
-                    filterParcelStatus === "low"
+                    (filterParcelStatus === "low" || filterProductStatus === "low")
                       ? "ring-2 ring-[#FACC15] shadow-[#FACC15]/30 shadow-lg scale-[1.03]"
                       : ""
                   } ${
@@ -580,29 +629,34 @@ export default function Page() {
                   >
                     Low Stock
                   </p>
-                  <p className="text-2xl font-bold">{parcelStatusCounts.low}</p>
+                  <p className="text-2xl font-bold">
+                    {parcelStatusCounts.low + productStatusCounts.low}
+                  </p>
                 </div>
 
-                {/* Available */}
+                {/* Normal Stock */}
                 <div
-                  onClick={() => setFilterParcelStatus("available")}
+                  onClick={() => {
+                    setFilterParcelStatus("normal");
+                    setFilterProductStatus("normal");
+                  }}
                   className={`p-3 sm:p-4 rounded-xl border cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-xl group ${
-                    filterParcelStatus === "available"
-                      ? "ring-2 ring-[#22C55E] shadow-[#22C55E]/30 shadow-lg scale-[1.03]"
+                    (filterParcelStatus === "normal" || filterProductStatus === "normal")
+                      ? "ring-2 ring-[#10B981] shadow-[#10B981]/30 shadow-lg scale-[1.03]"
                       : ""
                   } ${
                     darkMode
                       ? "bg-[#1F2937] border-[#374151] hover:bg-[#374151]"
-                      : "bg-white border-[#E5E7EB] hover:bg-[#DCFCE7]"
+                      : "bg-white border-[#E5E7EB] hover:bg-[#D1FAE5]"
                   } animate__animated animate__fadeInUp`}
                   style={{ animationDelay: "0.4s" }}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <Box className="w-5 h-5 text-[#22C55E]" />
+                    <Package className="w-5 h-5 text-[#10B981]" />
                     <span
                       className={`text-xs px-2 py-1 rounded-full ${
-                        darkMode ? "bg-[#22C55E]/20" : "bg-[#DCFCE7]"
-                      } text-[#22C55E]`}
+                        darkMode ? "bg-[#10B981]/20" : "bg-[#D1FAE5]"
+                      } text-[#10B981]`}
                     >
                       Good
                     </span>
@@ -610,10 +664,10 @@ export default function Page() {
                   <p
                     className={`text-xs mb-1 ${darkMode ? "text-gray-400" : "text-gray-600"}`}
                   >
-                    Available
+                    Normal Stock
                   </p>
                   <p className="text-2xl font-bold">
-                    {parcelStatusCounts.available}
+                    {parcelStatusCounts.normal + productStatusCounts.normal}
                   </p>
                 </div>
               </div>
@@ -849,381 +903,7 @@ export default function Page() {
               </div>
             </div>
 
-            {/* ============= PRODUCT SECTION ============= */}
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <Box className="w-6 h-6 text-[#7c3aed]" />
-                <h2 className="text-xl font-bold">Product Inventory Status</h2>
-              </div>
-
-              {/* Product Status Summary Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                {/* Out of Stock */}
-                <div
-                  onClick={() => setFilterProductStatus("out")}
-                  className={`p-3 sm:p-4 rounded-xl border cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-xl group ${
-                    filterProductStatus === "out"
-                      ? "ring-2 ring-[#EF4444] shadow-[#EF4444]/30 shadow-lg scale-[1.03]"
-                      : ""
-                  } ${
-                    darkMode
-                      ? "bg-[#1F2937] border-[#374151] hover:bg-[#374151]"
-                      : "bg-white border-[#E5E7EB] hover:bg-[#FEE2E2]"
-                  } animate__animated animate__fadeInUp`}
-                  style={{ animationDelay: "0.5s" }}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <XCircle className="w-5 h-5 text-[#EF4444]" />
-                    <span
-                      className={`text-xs px-2 py-1 rounded-full ${
-                        darkMode ? "bg-[#EF4444]/20" : "bg-[#FEE2E2]"
-                      } text-[#EF4444]`}
-                    >
-                      Critical
-                    </span>
-                  </div>
-                  <p
-                    className={`text-xs mb-1 ${darkMode ? "text-gray-400" : "text-gray-600"}`}
-                  >
-                    Out of Stock
-                  </p>
-                  <p className="text-2xl font-bold">
-                    {productStatusCounts.out}
-                  </p>
-                </div>
-
-                {/* Critical Level */}
-                <div
-                  onClick={() => setFilterProductStatus("critical")}
-                  className={`p-3 sm:p-4 rounded-xl border cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-xl group ${
-                    filterProductStatus === "critical"
-                      ? "ring-2 ring-[#F97316] shadow-[#F97316]/30 shadow-lg scale-[1.03]"
-                      : ""
-                  } ${
-                    darkMode
-                      ? "bg-[#1F2937] border-[#374151] hover:bg-[#374151]"
-                      : "bg-white border-[#E5E7EB] hover:bg-[#FFEDD5]"
-                  } animate__animated animate__fadeInUp`}
-                  style={{ animationDelay: "0.6s" }}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <AlertTriangle className="w-5 h-5 text-[#F97316]" />
-                    <span
-                      className={`text-xs px-2 py-1 rounded-full ${
-                        darkMode ? "bg-[#F97316]/20" : "bg-[#FFEDD5]"
-                      } text-[#F97316]`}
-                    >
-                      Alert
-                    </span>
-                  </div>
-                  <p
-                    className={`text-xs mb-1 ${darkMode ? "text-gray-400" : "text-gray-600"}`}
-                  >
-                    Critical Level
-                  </p>
-                  <p className="text-2xl font-bold">
-                    {productStatusCounts.critical}
-                  </p>
-                </div>
-
-                {/* Low Stock */}
-                <div
-                  onClick={() => setFilterProductStatus("low")}
-                  className={`p-3 sm:p-4 rounded-xl border cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-xl group ${
-                    filterProductStatus === "low"
-                      ? "ring-2 ring-[#FACC15] shadow-[#FACC15]/30 shadow-lg scale-[1.03]"
-                      : ""
-                  } ${
-                    darkMode
-                      ? "bg-[#1F2937] border-[#374151] hover:bg-[#374151]"
-                      : "bg-white border-[#E5E7EB] hover:bg-[#FEF9C3]"
-                  } animate__animated animate__fadeInUp`}
-                  style={{ animationDelay: "0.7s" }}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <TrendingDown className="w-5 h-5 text-[#FACC15]" />
-                    <span
-                      className={`text-xs px-2 py-1 rounded-full ${
-                        darkMode ? "bg-[#FACC15]/20" : "bg-[#FEF9C3]"
-                      } text-[#FACC15]`}
-                    >
-                      Warning
-                    </span>
-                  </div>
-                  <p
-                    className={`text-xs mb-1 ${darkMode ? "text-gray-400" : "text-gray-600"}`}
-                  >
-                    Low Stock
-                  </p>
-                  <p className="text-2xl font-bold">
-                    {productStatusCounts.low}
-                  </p>
-                </div>
-
-                {/* Available */}
-                <div
-                  onClick={() => setFilterProductStatus("available")}
-                  className={`p-3 sm:p-4 rounded-xl border cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-xl group ${
-                    filterProductStatus === "available"
-                      ? "ring-2 ring-[#22C55E] shadow-[#22C55E]/30 shadow-lg scale-[1.03]"
-                      : ""
-                  } ${
-                    darkMode
-                      ? "bg-[#1F2937] border-[#374151] hover:bg-[#374151]"
-                      : "bg-white border-[#E5E7EB] hover:bg-[#DCFCE7]"
-                  } animate__animated animate__fadeInUp`}
-                  style={{ animationDelay: "0.8s" }}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <Box className="w-5 h-5 text-[#22C55E]" />
-                    <span
-                      className={`text-xs px-2 py-1 rounded-full ${
-                        darkMode ? "bg-[#22C55E]/20" : "bg-[#DCFCE7]"
-                      } text-[#22C55E]`}
-                    >
-                      Good
-                    </span>
-                  </div>
-                  <p
-                    className={`text-xs mb-1 ${darkMode ? "text-gray-400" : "text-gray-600"}`}
-                  >
-                    Available
-                  </p>
-                  <p className="text-2xl font-bold">
-                    {productStatusCounts.available}
-                  </p>
-                </div>
-              </div>
-
-              {/* Product Filter Dropdown */}
-              <div className="mb-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <label
-                    className={`block text-sm font-medium mb-2 ${
-                      darkMode ? "text-gray-300" : "text-gray-700"
-                    }`}
-                  >
-                    Filter by Status:
-                  </label>
-                  <select
-                    value={filterProductStatus}
-                    onChange={(e) => setFilterProductStatus(e.target.value)}
-                    className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#a78bfa] focus:border-[#a78bfa] bg-[#111827] text-white"
-                        : "border-[#D1D5DB] focus:ring-[#7c3aed] focus:border-[#7c3aed] bg-white text-black"
-                    }`}
-                  >
-                    <option value="all">
-                      All Status ({productItems.length})
-                    </option>
-                    <option value="available">
-                      Available ({productStatusCounts.available})
-                    </option>
-                    <option value="low">
-                      Low Stock ({productStatusCounts.low})
-                    </option>
-                    <option value="critical">
-                      Critical Level ({productStatusCounts.critical})
-                    </option>
-                    <option value="out">
-                      Out of Stock ({productStatusCounts.out})
-                    </option>
-                  </select>
-                </div>
-                <div>
-                  <label
-                    className={`block text-sm font-medium mb-2 ${
-                      darkMode ? "text-gray-300" : "text-gray-700"
-                    }`}
-                  >
-                    Filter by Category:
-                  </label>
-                  <select
-                    value={productCategoryFilter}
-                    onChange={(e) => setProductCategoryFilter(e.target.value)}
-                    className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#a78bfa] focus:border-[#a78bfa] bg-[#111827] text-white"
-                        : "border-[#D1D5DB] focus:ring-[#7c3aed] focus:border-[#7c3aed] bg-white text-black"
-                    }`}
-                  >
-                    <option value="all">All Categories</option>
-                    {CATEGORY_OPTIONS.map((cat) => (
-                      <option key={cat.value} value={cat.value}>
-                        {cat.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label
-                    className={`block text-sm font-medium mb-2 ${
-                      darkMode ? "text-gray-300" : "text-gray-700"
-                    }`}
-                  >
-                    Search:
-                  </label>
-                  <input
-                    type="text"
-                    value={productSearch}
-                    onChange={(e) => setProductSearch(e.target.value)}
-                    placeholder="Search by name, code, or SKU"
-                    className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#a78bfa] focus:border-[#a78bfa] bg-[#111827] text-white"
-                        : "border-[#D1D5DB] focus:ring-[#7c3aed] focus:border-[#7c3aed] bg-white text-black"
-                    }`}
-                  />
-                </div>
-              </div>
-
-              {/* Product Items Table */}
-              <div
-                ref={productTableRef}
-                className={`rounded-xl shadow-lg overflow-hidden border ${
-                  focusedSection === "product"
-                    ? "ring-2 ring-[#7c3aed] ring-offset-2 ring-offset-transparent"
-                    : ""
-                } ${
-                  darkMode
-                    ? "bg-[#1F2937] border-[#374151]"
-                    : "bg-white border-[#E5E7EB]"
-                }`}
-              >
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead
-                      className={
-                        darkMode
-                          ? "bg-[#374151] text-gray-300"
-                          : "bg-[#7c3aed] text-white"
-                      }
-                    >
-                      <tr>
-                        {[
-                          "Product Name",
-                          "Product Code",
-                          "SKU",
-                          "Description",
-                          "Category",
-                          "Stock Quantity",
-                          "Status",
-                          "Date Added",
-                          "Actions",
-                        ].map((head) => (
-                          <th
-                            key={head}
-                            className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider"
-                          >
-                            {head}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody
-                      className={`divide-y ${
-                        darkMode ? "divide-[#374151]" : "divide-[#E5E7EB]"
-                      }`}
-                    >
-                      {filteredProductItems.length === 0 ? (
-                        <tr>
-                          <td colSpan="9" className="px-4 py-12 text-center">
-                            <div className="flex flex-col items-center justify-center gap-3">
-                              <Box
-                                className={`w-12 h-12 ${
-                                  darkMode ? "text-gray-600" : "text-gray-400"
-                                }`}
-                              />
-                              <p
-                                className={`text-sm ${
-                                  darkMode ? "text-gray-400" : "text-gray-600"
-                                }`}
-                              >
-                                No products found
-                              </p>
-                              <p
-                                className={`text-xs ${
-                                  darkMode ? "text-gray-500" : "text-gray-500"
-                                }`}
-                              >
-                                Try changing the filter
-                              </p>
-                            </div>
-                          </td>
-                        </tr>
-                      ) : (
-                        filteredProductItems.map((item, index) => (
-                          <tr
-                            key={index}
-                            className={`transition-colors ${
-                              darkMode
-                                ? "hover:bg-[#374151]"
-                                : "hover:bg-[#F9FAFB]"
-                            }`}
-                          >
-                            <td className="px-4 py-3 text-sm font-medium align-top">
-                              <div className="flex items-start gap-2 min-w-0">
-                                <div
-                                  className={`w-2 h-2 rounded-full ${getIndicatorColor(
-                                    item.quantity,
-                                  )}`}
-                                />
-                                <span className="break-words whitespace-normal">
-                                  {item.product_name}
-                                </span>
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-sm">
-                              {buildProductCode(item)}
-                            </td>
-                            <td className="px-4 py-3 text-sm">{buildSku(item)}</td>
-                            <td className="px-4 py-3 text-sm">
-                              {buildDescription(item)}
-                            </td>
-                            <td className="px-4 py-3 text-sm">
-                              <span
-                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${getCategoryColor(item.category)}`}
-                              >
-                                <span>{getCategoryIcon(item.category)}</span>
-                                {item.category || 'Uncategorized'}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-sm">
-                              {item.quantity} units
-                            </td>
-                            <td className="px-4 py-3 text-sm">
-                              <span
-                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                                  item.quantity,
-                                  darkMode,
-                                )}`}
-                              >
-                                {getStatusIcon(item.quantity)}
-                                {getStatusLabel(item.quantity)}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-sm">{item.date}</td>
-                            <td className="px-4 py-3 text-sm">
-                              {item.quantity === 0 ? (
-                                <Link href={`/view/product-in?product=${encodeURIComponent(item.product_name)}`}>
-                                  <div className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded cursor-pointer">
-                                    Add Stock
-                                  </div>
-                                </Link>
-                              ) : (
-                                "-"
-                              )}
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </div>
+                      </div>
         </div>
         {showExportModal && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
@@ -1283,6 +963,104 @@ export default function Page() {
                   }`}
                 >
                   Save PDF Only
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* New Category Modal */}
+        {showNewCategoryModal && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+              onClick={() => setShowNewCategoryModal(false)}
+            />
+            <div
+              className={`relative z-10 w-full max-w-md rounded-xl border shadow-2xl p-6 ${
+                darkMode
+                  ? "bg-[#1F2937] border-[#374151] text-white"
+                  : "bg-white border-[#E5E7EB] text-[#111827]"
+              }`}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold">Create New Category</h3>
+                <button
+                  onClick={() => setShowNewCategoryModal(false)}
+                  className={`p-2 rounded-lg transition-colors ${
+                    darkMode
+                      ? "hover:bg-[#374151] text-gray-400"
+                      : "hover:bg-gray-100 text-gray-600"
+                  }`}
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label
+                    className={`block text-sm font-medium mb-2 ${
+                      darkMode ? "text-gray-300" : "text-gray-700"
+                    }`}
+                  >
+                    Category Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    placeholder="Enter category name"
+                    className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-all ${
+                      darkMode
+                        ? "border-[#374151] focus:ring-[#60A5FA] focus:border-[#60A5FA] bg-[#111827] text-white"
+                        : "border-[#D1D5DB] focus:ring-[#1e40af] focus:border-[#1e40af] bg-white text-black"
+                    }`}
+                  />
+                </div>
+
+                <div>
+                  <label
+                    className={`block text-sm font-medium mb-2 ${
+                      darkMode ? "text-gray-300" : "text-gray-700"
+                    }`}
+                  >
+                    Description
+                  </label>
+                  <textarea
+                    value={newCategoryDescription}
+                    onChange={(e) => setNewCategoryDescription(e.target.value)}
+                    placeholder="Enter category description (optional)"
+                    rows={3}
+                    className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-all resize-none ${
+                      darkMode
+                        ? "border-[#374151] focus:ring-[#60A5FA] focus:border-[#60A5FA] bg-[#111827] text-white"
+                        : "border-[#D1D5DB] focus:ring-[#1e40af] focus:border-[#1e40af] bg-white text-black"
+                    }`}
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  onClick={() => setShowNewCategoryModal(false)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    darkMode
+                      ? "bg-gray-600 hover:bg-gray-700 text-white"
+                      : "bg-gray-200 hover:bg-gray-300 text-gray-800"
+                  }`}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateNewCategory}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    darkMode
+                      ? "bg-green-600 hover:bg-green-700 text-white"
+                      : "bg-green-500 hover:bg-green-600 text-white"
+                  }`}
+                >
+                  Create Category
                 </button>
               </div>
             </div>
