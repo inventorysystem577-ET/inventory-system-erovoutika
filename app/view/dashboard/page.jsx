@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import Sidebar from "../../components/Sidebar";
 import TopNavbar from "../../components/TopNavbar";
 import AuthGuard from "../../components/AuthGuard";
+import DashboardSummaryCard from "../../components/DashboardSummaryCard";
+import DashboardStatusCard from "../../components/DashboardStatusCard";
 import { useAuth } from "../../hook/useAuth";
 import { isAdminRole } from "../../utils/roleHelper";
 import {
@@ -28,6 +30,37 @@ import {
   fetchProductOutController,
 } from "../../controller/productController";
 import { buildProductCode, buildSku } from "../../utils/inventoryMeta";
+
+const DEFAULT_STOCK_THRESHOLDS = {
+  critical: 5,
+  low: 10,
+};
+
+const STOCK_THRESHOLDS_STORAGE_KEY = "inventory-item-thresholds-v1";
+
+const normalizeItemKey = (value) =>
+  (value || "")
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+
+const sanitizeThresholds = (value = {}) => {
+  const criticalRaw = Number(value.critical);
+  const lowRaw = Number(value.low);
+
+  const critical = Number.isFinite(criticalRaw)
+    ? Math.max(1, Math.floor(criticalRaw))
+    : DEFAULT_STOCK_THRESHOLDS.critical;
+
+  let low = Number.isFinite(lowRaw)
+    ? Math.max(2, Math.floor(lowRaw))
+    : DEFAULT_STOCK_THRESHOLDS.low;
+
+  if (low <= critical) low = critical + 1;
+
+  return { critical, low };
+};
 
 export default function page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -61,6 +94,7 @@ export default function page() {
     low: 0,
     available: 0,
   });
+  const [itemThresholds, setItemThresholds] = useState({});
 
   const [inventorySearch, setInventorySearch] = useState("");
 
@@ -77,32 +111,55 @@ export default function page() {
     return `${hour12}:${minutes} ${period}`;
   };
 
-  const getStockStatus = (quantity) => {
-    if (quantity === 0) return "out";
-    if (quantity <= 5) return "critical";
-    if (quantity < 10) return "low";
+  const getThresholdKey = (type, item) => {
+    const baseName = type === "parcel" ? item?.name : item?.product_name;
+    return `${type}:${normalizeItemKey(baseName)}`;
+  };
+
+  const getItemThreshold = (type, item) => {
+    const key = getThresholdKey(type, item);
+    return sanitizeThresholds(itemThresholds[key]);
+  };
+
+  const getStockStatus = (quantity, threshold = DEFAULT_STOCK_THRESHOLDS) => {
+    const qty = Number(quantity || 0);
+    const normalizedThreshold = sanitizeThresholds(threshold);
+
+    if (qty <= 0) return "out";
+    if (qty <= normalizedThreshold.critical) return "critical";
+    if (qty < normalizedThreshold.low) return "low";
     return "available";
   };
 
-  const getStatusLabel = (quantity) => {
-    if (quantity === 0) return "Out of Stock";
-    if (quantity <= 5) return "Critical Level";
-    if (quantity < 10) return "Low Stock";
+  const getStatusLabel = (
+    quantity,
+    threshold = DEFAULT_STOCK_THRESHOLDS,
+  ) => {
+    const status = getStockStatus(quantity, threshold);
+    if (status === "out") return "Out of Stock";
+    if (status === "critical") return "Critical Level";
+    if (status === "low") return "Low Stock";
     return "Available";
   };
 
-  const getStatusColor = (quantity, darkMode) => {
-    if (quantity === 0) {
+  const getStatusColor = (
+    quantity,
+    darkMode,
+    threshold = DEFAULT_STOCK_THRESHOLDS,
+  ) => {
+    const status = getStockStatus(quantity, threshold);
+
+    if (status === "out") {
       return darkMode
         ? "bg-red-900/30 text-red-400 border border-red-800"
         : "bg-red-50 text-red-700 border border-red-200";
     }
-    if (quantity <= 5) {
+    if (status === "critical") {
       return darkMode
         ? "bg-orange-900/30 text-orange-400 border border-orange-800"
         : "bg-orange-50 text-orange-700 border border-orange-200";
     }
-    if (quantity < 10) {
+    if (status === "low") {
       return darkMode
         ? "bg-yellow-900/30 text-yellow-400 border border-yellow-800"
         : "bg-yellow-50 text-yellow-700 border border-yellow-200";
@@ -112,13 +169,45 @@ export default function page() {
       : "bg-green-50 text-green-700 border border-green-200";
   };
 
-  const getStatusIcon = (quantity) => {
-    if (quantity === 0) return <XCircle className="w-4 h-4" />;
-    if (quantity <= 5)
+  const getStatusIcon = (quantity, threshold = DEFAULT_STOCK_THRESHOLDS) => {
+    const status = getStockStatus(quantity, threshold);
+    if (status === "out") return <XCircle className="w-4 h-4" />;
+    if (status === "critical")
       return <AlertTriangle className="w-4 h-4 animate-pulse" />;
-    if (quantity < 10) return <TrendingDown className="w-4 h-4" />;
+    if (status === "low") return <TrendingDown className="w-4 h-4" />;
     return <Box className="w-4 h-4" />;
   };
+
+  const computeStatusCounts = (items = [], type) => {
+    return items.reduce(
+      (acc, item) => {
+        const qty = Number(item.quantity || 0);
+        const threshold = getItemThreshold(type, item);
+        const status = getStockStatus(qty, threshold);
+
+        if (qty <= 0) acc.out += 1;
+        if (qty > 0) acc.available += 1;
+        if (status === "critical") acc.critical += 1;
+        if (status === "low") acc.low += 1;
+
+        return acc;
+      },
+      { out: 0, critical: 0, low: 0, available: 0 },
+    );
+  };
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STOCK_THRESHOLDS_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        setItemThresholds(parsed);
+      }
+    } catch (error) {
+      console.error("Failed to load stock thresholds in dashboard:", error);
+    }
+  }, []);
 
   useEffect(() => {
     const savedDarkMode = localStorage.getItem("darkMode");
@@ -130,14 +219,6 @@ export default function page() {
 
       setParcelShipped(shippedRes || []);
       setStockItems(shippedRes || []);
-
-      // Calculate component status counts
-      const counts = { out: 0, critical: 0, low: 0, available: 0 };
-      (shippedRes || []).forEach((item) => {
-        const status = getStockStatus(item.quantity);
-        counts[status]++;
-      });
-      setStatusCounts(counts);
 
       const itemsWithStock =
         (shippedRes || []).filter((item) => item.quantity > 0).length || 0;
@@ -157,17 +238,15 @@ export default function page() {
       setProductInCount(productInWithStock);
       setProductOutCount((productOutRes || []).length || 0);
 
-      // Calculate product status counts
-      const productCounts = { out: 0, critical: 0, low: 0, available: 0 };
-      (productInRes || []).forEach((item) => {
-        const status = getStockStatus(item.quantity);
-        productCounts[status]++;
-      });
-      setProductStatusCounts(productCounts);
     };
 
     fetchData();
   }, []);
+
+  useEffect(() => {
+    setStatusCounts(computeStatusCounts(stockItems, "parcel"));
+    setProductStatusCounts(computeStatusCounts(productIn, "product"));
+  }, [stockItems, productIn, itemThresholds]);
 
   const handleCardClick = (route, status = null, type = null) => {
     if (status && type) {
@@ -181,10 +260,15 @@ export default function page() {
 
   const searchKey = inventorySearch.trim().toLowerCase();
 
-  const itemsNeedingAttention = stockItems.filter((item) => item.quantity < 10);
+  const itemsNeedingAttention = stockItems.filter((item) => {
+    const threshold = getItemThreshold("parcel", item);
+    return Number(item.quantity || 0) > 0 && Number(item.quantity || 0) < threshold.low;
+  });
 
   const productsNeedingAttention = productIn.filter((item) => {
-    if (item.quantity >= 10) return false;
+    const threshold = getItemThreshold("product", item);
+    const qty = Number(item.quantity || 0);
+    if (qty <= 0 || qty >= threshold.low) return false;
     if (!searchKey) return true;
     return (
       (item.product_name || "").toLowerCase().includes(searchKey) ||
@@ -230,37 +314,27 @@ export default function page() {
                 isAdmin ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-2" : "grid-cols-1"
               }`}
             >
-              <div
+              <DashboardSummaryCard
                 onClick={() => handleCardClick("/view/parcel-shipped")}
-                className="bg-gradient-to-br from-[#1e40af] to-[#1e3a8a] text-white p-6 rounded-xl shadow-lg animate__animated animate__fadeInUp cursor-pointer transform transition-all duration-200 hover:scale-105 hover:shadow-2xl active:scale-95"
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <PackageCheck className="w-10 h-10" />
-                  <Clock className="w-5 h-5 opacity-70" />
-                </div>
-                <h3 className="text-sm font-medium opacity-90 mb-1">
-                  Stock In
-                </h3>
-                <p className="text-3xl font-bold mb-2">{parcelShippedCount}</p>
-                <p className="text-xs opacity-75">Items in stock</p>
-              </div>
+                containerClassName="bg-gradient-to-br from-[#1e40af] to-[#1e3a8a]"
+                Icon={PackageCheck}
+                MetaIcon={Clock}
+                title="Stock In"
+                value={parcelShippedCount}
+                subtitle="Items in stock"
+              />
 
               {isAdmin && (
-                <div
+                <DashboardSummaryCard
                   onClick={() => handleCardClick("/view/parcel-delivery")}
-                  className="bg-gradient-to-br from-[#ea580c] to-[#c2410c] text-white p-6 rounded-xl shadow-lg animate__animated animate__fadeInUp cursor-pointer transform transition-all duration-200 hover:scale-105 hover:shadow-2xl active:scale-95"
-                  style={{ animationDelay: "0.1s" }}
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <PackageOpen className="w-10 h-10" />
-                    <TrendingDown className="w-5 h-5 opacity-70" />
-                  </div>
-                  <h3 className="text-sm font-medium opacity-90 mb-1">
-                    Stock Out
-                  </h3>
-                  <p className="text-3xl font-bold mb-2">{parcelDeliveryCount}</p>
-                  <p className="text-xs opacity-75">Items delivered</p>
-                </div>
+                  containerClassName="bg-gradient-to-br from-[#ea580c] to-[#c2410c]"
+                  Icon={PackageOpen}
+                  MetaIcon={TrendingDown}
+                  title="Stock Out"
+                  value={parcelDeliveryCount}
+                  subtitle="Items delivered"
+                  animationDelay="0.1s"
+                />
               )}
             </div>
 
@@ -271,133 +345,62 @@ export default function page() {
                 Component Stock Status
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Component Out of Stock */}
-                <div
+                <DashboardStatusCard
                   onClick={() =>
                     handleCardClick("/view/out-of-stock", "out", "parcel")
                   }
-                  className={`p-6 rounded-xl shadow-lg animate__animated animate__fadeInUp cursor-pointer transform transition-all duration-200 hover:scale-105 hover:shadow-xl active:scale-95 ${
-                    darkMode
-                      ? "bg-gray-800 border border-gray-700"
-                      : "bg-white border border-gray-200"
-                  }`}
-                  style={{ animationDelay: "0.2s" }}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <XCircle className="w-6 h-6 text-red-500" />
-                    <p className="text-xs text-gray-500">Critical</p>
-                  </div>
-                  <p
-                    className={`text-sm mb-1 ${darkMode ? "text-gray-400" : "text-gray-600"}`}
-                  >
-                    Out of Stock
-                  </p>
-                  <p className="text-2xl font-bold">{statusCounts.out}</p>
-                  <div className="mt-2 bg-gray-200 rounded-full h-1.5 dark:bg-gray-700">
-                    <div
-                      className="bg-red-500 h-1.5 rounded-full transition-all duration-500"
-                      style={{
-                        width: `${stockItems.length > 0 ? (statusCounts.out / stockItems.length) * 100 : 0}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* Component Critical */}
-                <div
+                  darkMode={darkMode}
+                  Icon={XCircle}
+                  iconClassName="text-red-500"
+                  badge="Critical"
+                  title="Out of Stock"
+                  value={statusCounts.out}
+                  total={stockItems.length}
+                  barClassName="bg-red-500"
+                  animationDelay="0.2s"
+                />
+                <DashboardStatusCard
                   onClick={() =>
                     handleCardClick("/view/out-of-stock", "critical", "parcel")
                   }
-                  className={`p-6 rounded-xl shadow-lg animate__animated animate__fadeInUp cursor-pointer transform transition-all duration-200 hover:scale-105 hover:shadow-xl active:scale-95 ${
-                    darkMode
-                      ? "bg-gray-800 border border-gray-700"
-                      : "bg-white border border-gray-200"
-                  }`}
-                  style={{ animationDelay: "0.3s" }}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <AlertTriangle className="w-6 h-6 text-orange-500" />
-                    <p className="text-xs text-gray-500">Alert</p>
-                  </div>
-                  <p
-                    className={`text-sm mb-1 ${darkMode ? "text-gray-400" : "text-gray-600"}`}
-                  >
-                    Critical Level
-                  </p>
-                  <p className="text-2xl font-bold">{statusCounts.critical}</p>
-                  <div className="mt-2 bg-gray-200 rounded-full h-1.5 dark:bg-gray-700">
-                    <div
-                      className="bg-orange-500 h-1.5 rounded-full transition-all duration-500"
-                      style={{
-                        width: `${stockItems.length > 0 ? (statusCounts.critical / stockItems.length) * 100 : 0}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* Component Low Stock */}
-                <div
+                  darkMode={darkMode}
+                  Icon={AlertTriangle}
+                  iconClassName="text-orange-500"
+                  badge="Alert"
+                  title="Critical Level"
+                  value={statusCounts.critical}
+                  total={stockItems.length}
+                  barClassName="bg-orange-500"
+                  animationDelay="0.3s"
+                />
+                <DashboardStatusCard
                   onClick={() =>
                     handleCardClick("/view/out-of-stock", "low", "parcel")
                   }
-                  className={`p-6 rounded-xl shadow-lg animate__animated animate__fadeInUp cursor-pointer transform transition-all duration-200 hover:scale-105 hover:shadow-xl active:scale-95 ${
-                    darkMode
-                      ? "bg-gray-800 border border-gray-700"
-                      : "bg-white border border-gray-200"
-                  }`}
-                  style={{ animationDelay: "0.4s" }}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <TrendingDown className="w-6 h-6 text-yellow-500" />
-                    <p className="text-xs text-gray-500">Warning</p>
-                  </div>
-                  <p
-                    className={`text-sm mb-1 ${darkMode ? "text-gray-400" : "text-gray-600"}`}
-                  >
-                    Low Stock
-                  </p>
-                  <p className="text-2xl font-bold">{statusCounts.low}</p>
-                  <div className="mt-2 bg-gray-200 rounded-full h-1.5 dark:bg-gray-700">
-                    <div
-                      className="bg-yellow-500 h-1.5 rounded-full transition-all duration-500"
-                      style={{
-                        width: `${stockItems.length > 0 ? (statusCounts.low / stockItems.length) * 100 : 0}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* Component Available */}
-                <div
+                  darkMode={darkMode}
+                  Icon={TrendingDown}
+                  iconClassName="text-yellow-500"
+                  badge="Warning"
+                  title="Low Stock"
+                  value={statusCounts.low}
+                  total={stockItems.length}
+                  barClassName="bg-yellow-500"
+                  animationDelay="0.4s"
+                />
+                <DashboardStatusCard
                   onClick={() =>
                     handleCardClick("/view/out-of-stock", "available", "parcel")
                   }
-                  className={`p-6 rounded-xl shadow-lg animate__animated animate__fadeInUp cursor-pointer transform transition-all duration-200 hover:scale-105 hover:shadow-xl active:scale-95 ${
-                    darkMode
-                      ? "bg-gray-800 border border-gray-700"
-                      : "bg-white border border-gray-200"
-                  }`}
-                  style={{ animationDelay: "0.5s" }}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <Box className="w-6 h-6 text-green-500" />
-                    <p className="text-xs text-gray-500">Good</p>
-                  </div>
-                  <p
-                    className={`text-sm mb-1 ${darkMode ? "text-gray-400" : "text-gray-600"}`}
-                  >
-                    Available
-                  </p>
-                  <p className="text-2xl font-bold">{statusCounts.available}</p>
-                  <div className="mt-2 bg-gray-200 rounded-full h-1.5 dark:bg-gray-700">
-                    <div
-                      className="bg-green-500 h-1.5 rounded-full transition-all duration-500"
-                      style={{
-                        width: `${stockItems.length > 0 ? (statusCounts.available / stockItems.length) * 100 : 0}%`,
-                      }}
-                    />
-                  </div>
-                </div>
+                  darkMode={darkMode}
+                  Icon={Box}
+                  iconClassName="text-green-500"
+                  badge="In-Stock"
+                  title="Available"
+                  value={statusCounts.available}
+                  total={stockItems.length}
+                  barClassName="bg-green-500"
+                  animationDelay="0.5s"
+                />
               </div>
             </div>
 
@@ -408,110 +411,49 @@ export default function page() {
                 Product Stock Status
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Product Out of Stock */}
-                <div
+                <DashboardStatusCard
                   onClick={() =>
                     handleCardClick("/view/out-of-stock", "out", "product")
                   }
-                  className={`p-6 rounded-xl shadow-lg animate__animated animate__fadeInUp cursor-pointer transform transition-all duration-200 hover:scale-105 hover:shadow-xl active:scale-95 ${
-                    darkMode
-                      ? "bg-gray-800 border border-gray-700"
-                      : "bg-white border border-gray-200"
-                  }`}
-                  style={{ animationDelay: "0.6s" }}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <XCircle className="w-6 h-6 text-red-500" />
-                    <p className="text-xs text-gray-500">Critical</p>
-                  </div>
-                  <p
-                    className={`text-sm mb-1 ${darkMode ? "text-gray-400" : "text-gray-600"}`}
-                  >
-                    Out of Stock
-                  </p>
-                  <p className="text-2xl font-bold">
-                    {productStatusCounts.out}
-                  </p>
-                  <div className="mt-2 bg-gray-200 rounded-full h-1.5 dark:bg-gray-700">
-                    <div
-                      className="bg-red-500 h-1.5 rounded-full transition-all duration-500"
-                      style={{
-                        width: `${productIn.length > 0 ? (productStatusCounts.out / productIn.length) * 100 : 0}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* Product Critical */}
-                <div
+                  darkMode={darkMode}
+                  Icon={XCircle}
+                  iconClassName="text-red-500"
+                  badge="Critical"
+                  title="Out of Stock"
+                  value={productStatusCounts.out}
+                  total={productIn.length}
+                  barClassName="bg-red-500"
+                  animationDelay="0.6s"
+                />
+                <DashboardStatusCard
                   onClick={() =>
                     handleCardClick("/view/out-of-stock", "critical", "product")
                   }
-                  className={`p-6 rounded-xl shadow-lg animate__animated animate__fadeInUp cursor-pointer transform transition-all duration-200 hover:scale-105 hover:shadow-xl active:scale-95 ${
-                    darkMode
-                      ? "bg-gray-800 border border-gray-700"
-                      : "bg-white border border-gray-200"
-                  }`}
-                  style={{ animationDelay: "0.7s" }}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <AlertTriangle className="w-6 h-6 text-orange-500" />
-                    <p className="text-xs text-gray-500">Alert</p>
-                  </div>
-                  <p
-                    className={`text-sm mb-1 ${darkMode ? "text-gray-400" : "text-gray-600"}`}
-                  >
-                    Critical Level
-                  </p>
-                  <p className="text-2xl font-bold">
-                    {productStatusCounts.critical}
-                  </p>
-                  <div className="mt-2 bg-gray-200 rounded-full h-1.5 dark:bg-gray-700">
-                    <div
-                      className="bg-orange-500 h-1.5 rounded-full transition-all duration-500"
-                      style={{
-                        width: `${productIn.length > 0 ? (productStatusCounts.critical / productIn.length) * 100 : 0}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* Product Low Stock */}
-                <div
+                  darkMode={darkMode}
+                  Icon={AlertTriangle}
+                  iconClassName="text-orange-500"
+                  badge="Alert"
+                  title="Critical Level"
+                  value={productStatusCounts.critical}
+                  total={productIn.length}
+                  barClassName="bg-orange-500"
+                  animationDelay="0.7s"
+                />
+                <DashboardStatusCard
                   onClick={() =>
                     handleCardClick("/view/out-of-stock", "low", "product")
                   }
-                  className={`p-6 rounded-xl shadow-lg animate__animated animate__fadeInUp cursor-pointer transform transition-all duration-200 hover:scale-105 hover:shadow-xl active:scale-95 ${
-                    darkMode
-                      ? "bg-gray-800 border border-gray-700"
-                      : "bg-white border border-gray-200"
-                  }`}
-                  style={{ animationDelay: "0.8s" }}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <TrendingDown className="w-6 h-6 text-yellow-500" />
-                    <p className="text-xs text-gray-500">Warning</p>
-                  </div>
-                  <p
-                    className={`text-sm mb-1 ${darkMode ? "text-gray-400" : "text-gray-600"}`}
-                  >
-                    Low Stock
-                  </p>
-                  <p className="text-2xl font-bold">
-                    {productStatusCounts.low}
-                  </p>
-                  <div className="mt-2 bg-gray-200 rounded-full h-1.5 dark:bg-gray-700">
-                    <div
-                      className="bg-yellow-500 h-1.5 rounded-full transition-all duration-500"
-                      style={{
-                        width: `${productIn.length > 0 ? (productStatusCounts.low / productIn.length) * 100 : 0}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* Product Available */}
-                <div
+                  darkMode={darkMode}
+                  Icon={TrendingDown}
+                  iconClassName="text-yellow-500"
+                  badge="Warning"
+                  title="Low Stock"
+                  value={productStatusCounts.low}
+                  total={productIn.length}
+                  barClassName="bg-yellow-500"
+                  animationDelay="0.8s"
+                />
+                <DashboardStatusCard
                   onClick={() =>
                     handleCardClick(
                       "/view/out-of-stock",
@@ -519,34 +461,16 @@ export default function page() {
                       "product",
                     )
                   }
-                  className={`p-6 rounded-xl shadow-lg animate__animated animate__fadeInUp cursor-pointer transform transition-all duration-200 hover:scale-105 hover:shadow-xl active:scale-95 ${
-                    darkMode
-                      ? "bg-gray-800 border border-gray-700"
-                      : "bg-white border border-gray-200"
-                  }`}
-                  style={{ animationDelay: "0.9s" }}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <Box className="w-6 h-6 text-green-500" />
-                    <p className="text-xs text-gray-500">Good</p>
-                  </div>
-                  <p
-                    className={`text-sm mb-1 ${darkMode ? "text-gray-400" : "text-gray-600"}`}
-                  >
-                    Available
-                  </p>
-                  <p className="text-2xl font-bold">
-                    {productStatusCounts.available}
-                  </p>
-                  <div className="mt-2 bg-gray-200 rounded-full h-1.5 dark:bg-gray-700">
-                    <div
-                      className="bg-green-500 h-1.5 rounded-full transition-all duration-500"
-                      style={{
-                        width: `${productIn.length > 0 ? (productStatusCounts.available / productIn.length) * 100 : 0}%`,
-                      }}
-                    />
-                  </div>
-                </div>
+                  darkMode={darkMode}
+                  Icon={Box}
+                  iconClassName="text-green-500"
+                  badge="In-Stock"
+                  title="Available"
+                  value={productStatusCounts.available}
+                  total={productIn.length}
+                  barClassName="bg-green-500"
+                  animationDelay="0.9s"
+                />
               </div>
             </div>
 
@@ -667,9 +591,10 @@ export default function page() {
                             </td>
                             <td className="px-4 py-3 text-sm text-center align-middle">
                               <span
-                                className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs ${getStatusColor(item.quantity, darkMode)}`}
+                                className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs ${getStatusColor(item.quantity, darkMode, getItemThreshold("parcel", item))}`}
                               >
-                                {getStatusIcon(item.quantity)}
+                                {getStatusIcon(item.quantity, getItemThreshold("parcel", item))}
+                                {getStatusLabel(item.quantity, getItemThreshold("parcel", item))}
                               </span>
                             </td>
                           </tr>
@@ -749,9 +674,10 @@ export default function page() {
                             </td>
                             <td className="px-4 py-3 text-sm text-center align-middle">
                               <span
-                                className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs ${getStatusColor(item.quantity, darkMode)}`}
+                                className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs ${getStatusColor(item.quantity, darkMode, getItemThreshold("product", item))}`}
                               >
-                                {getStatusIcon(item.quantity)}
+                                {getStatusIcon(item.quantity, getItemThreshold("product", item))}
+                                {getStatusLabel(item.quantity, getItemThreshold("product", item))}
                               </span>
                             </td>
                           </tr>

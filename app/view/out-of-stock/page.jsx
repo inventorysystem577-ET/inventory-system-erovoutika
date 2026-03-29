@@ -10,6 +10,7 @@ import Sidebar from "../../components/Sidebar";
 import TopNavbar from "../../components/TopNavbar";
 import AuthGuard from "../../components/AuthGuard";
 import StockHistoryModal from "../../components/StockHistoryModal";
+import StockThresholdModal from "../../components/StockThresholdModal";
 import {
   Box,
   AlertTriangle,
@@ -17,6 +18,7 @@ import {
   XCircle,
   Package,
   Search,
+  BarChart3,
   PencilLine,
   Check,
   X,
@@ -63,11 +65,41 @@ import {
 import {
   upsertProductIn,
   getProductIn,
-  getProductInByName,
   updateProductInQuantity,
   updateProductIn,
   deleteProductInByName,
 } from "../../models/productModel";
+
+const DEFAULT_STOCK_THRESHOLDS = {
+  critical: 5,
+  low: 10,
+};
+
+const STOCK_THRESHOLDS_STORAGE_KEY = "inventory-item-thresholds-v1";
+
+const normalizeItemKey = (value) =>
+  (value || "")
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+
+const sanitizeThresholds = (value = {}) => {
+  const criticalRaw = Number(value.critical);
+  const lowRaw = Number(value.low);
+
+  const critical = Number.isFinite(criticalRaw)
+    ? Math.max(1, Math.floor(criticalRaw))
+    : DEFAULT_STOCK_THRESHOLDS.critical;
+
+  let low = Number.isFinite(lowRaw)
+    ? Math.max(2, Math.floor(lowRaw))
+    : DEFAULT_STOCK_THRESHOLDS.low;
+
+  if (low <= critical) low = critical + 1;
+
+  return { critical, low };
+};
 
 export default function Page() {
   const searchParams = useSearchParams();
@@ -112,6 +144,10 @@ export default function Page() {
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [historyTarget, setHistoryTarget] = useState(null);
   const [timeframePreview, setTimeframePreview] = useState(null);
+  const [showThresholdModal, setShowThresholdModal] = useState(false);
+  const [thresholdTarget, setThresholdTarget] = useState(null);
+  const [itemThresholds, setItemThresholds] = useState({});
+  const [isThresholdsHydrated, setIsThresholdsHydrated] = useState(false);
 
   const DESCRIPTION_TRUNCATE_LIMIT = 140;
   const truncateText = (value, maxLength) => {
@@ -185,32 +221,54 @@ export default function Page() {
   const parcelTableRef = useRef(null);
   const productTableRef = useRef(null);
 
-  const getStockStatus = (quantity) => {
-    if (quantity === 0) return "out";
-    if (quantity <= 5) return "critical";
-    if (quantity < 10) return "low";
+  const getThresholdKey = (type, item) => {
+    const baseName = type === "parcel" ? item?.name : item?.product_name;
+    return `${type}:${normalizeItemKey(baseName)}`;
+  };
+
+  const getItemThreshold = (type, item) => {
+    const key = getThresholdKey(type, item);
+    return sanitizeThresholds(itemThresholds[key]);
+  };
+
+  const getStockStatus = (quantity, threshold = DEFAULT_STOCK_THRESHOLDS) => {
+    const qty = Number(quantity || 0);
+    const normalizedThreshold = sanitizeThresholds(threshold);
+
+    if (qty <= 0) return "out";
+    if (qty <= normalizedThreshold.critical) return "critical";
+    if (qty < normalizedThreshold.low) return "low";
     return "available";
   };
 
-  const getStatusLabel = (quantity) => {
-    if (quantity === 0) return "Out of Stock";
-    if (quantity <= 5) return "Critical Level";
-    if (quantity < 10) return "Low Stock";
-    return "Available";
+  const getStatusLabel = (
+    quantity,
+    threshold = DEFAULT_STOCK_THRESHOLDS,
+  ) => {
+    const status = getStockStatus(quantity, threshold);
+    if (status === "out") return "Out of Stock";
+    if (status === "critical") return "Critical Level";
+    if (status === "low") return "Low Stock";
+    return "Well Stocked";
   };
 
-  const getStatusColor = (quantity, darkMode) => {
-    if (quantity === 0) {
+  const getStatusColor = (
+    quantity,
+    darkMode,
+    threshold = DEFAULT_STOCK_THRESHOLDS,
+  ) => {
+    const status = getStockStatus(quantity, threshold);
+    if (status === "out") {
       return darkMode
         ? "bg-[#EF4444]/20 text-[#EF4444] border border-[#EF4444]/30"
         : "bg-[#FEE2E2] text-[#DC2626] border border-[#FECACA]";
     }
-    if (quantity <= 5) {
+    if (status === "critical") {
       return darkMode
         ? "bg-[#F97316]/20 text-[#F97316] border border-[#F97316]/30"
         : "bg-[#FFEDD5] text-[#EA580C] border border-[#FED7AA]";
     }
-    if (quantity < 10) {
+    if (status === "low") {
       return darkMode
         ? "bg-[#FACC15]/20 text-[#FACC15] border border-[#FACC15]/30"
         : "bg-[#FEF9C3] text-[#EAB308] border border-[#FEF08A]";
@@ -220,19 +278,34 @@ export default function Page() {
       : "bg-[#DCFCE7] text-[#16A34A] border border-[#BBF7D0]";
   };
 
-  const getStatusIcon = (quantity) => {
-    if (quantity === 0) return <XCircle className="w-4 h-4" />;
-    if (quantity <= 5)
+  const getStatusIcon = (quantity, threshold = DEFAULT_STOCK_THRESHOLDS) => {
+    const status = getStockStatus(quantity, threshold);
+    if (status === "out") return <XCircle className="w-4 h-4" />;
+    if (status === "critical")
       return <AlertTriangle className="w-4 h-4 animate-pulse" />;
-    if (quantity < 10) return <TrendingDown className="w-4 h-4" />;
+    if (status === "low") return <TrendingDown className="w-4 h-4" />;
     return <Box className="w-4 h-4" />;
   };
 
-  const getIndicatorColor = (quantity) => {
-    if (quantity === 0) return "bg-[#EF4444]";
-    if (quantity <= 5) return "bg-[#F97316]";
-    if (quantity < 10) return "bg-[#FACC15]";
+  const getIndicatorColor = (
+    quantity,
+    threshold = DEFAULT_STOCK_THRESHOLDS,
+  ) => {
+    const status = getStockStatus(quantity, threshold);
+    if (status === "out") return "bg-[#EF4444]";
+    if (status === "critical") return "bg-[#F97316]";
+    if (status === "low") return "bg-[#FACC15]";
     return "bg-[#22C55E]";
+  };
+
+  const matchesStatusFilter = (quantity, threshold, filterValue) => {
+    const qty = Number(quantity || 0);
+    if (filterValue === "all") return true;
+    if (filterValue === "available") return qty > 0;
+    if (filterValue === "out") return qty <= 0;
+
+    const status = getStockStatus(qty, threshold);
+    return status === filterValue;
   };
 
   const getDisplayedQuantity = (type, item) => {
@@ -273,6 +346,34 @@ export default function Page() {
     if (savedDarkMode !== null) setDarkMode(savedDarkMode === "true");
     loadItems();
   }, []);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STOCK_THRESHOLDS_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          setItemThresholds(parsed);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load stock thresholds:", error);
+    } finally {
+      setIsThresholdsHydrated(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isThresholdsHydrated) return;
+    try {
+      localStorage.setItem(
+        STOCK_THRESHOLDS_STORAGE_KEY,
+        JSON.stringify(itemThresholds || {}),
+      );
+    } catch (error) {
+      console.error("Failed to save stock thresholds:", error);
+    }
+  }, [itemThresholds, isThresholdsHydrated]);
 
   useEffect(() => {
     if (statusParam && typeParam === "parcel") {
@@ -316,9 +417,12 @@ export default function Page() {
   }, [focusParam, typeParam, parcelItems.length, productItems.length]);
 
   const filteredParcelItems = parcelItems.filter((item) => {
-    const statusMatch =
-      filterParcelStatus === "all" ||
-      getStockStatus(item.quantity) === filterParcelStatus;
+    const threshold = getItemThreshold("parcel", item);
+    const statusMatch = matchesStatusFilter(
+      item.quantity,
+      threshold,
+      filterParcelStatus,
+    );
     const categoryMatch =
       parcelCategoryFilter === "all" ||
       (item.category || "").toLowerCase() ===
@@ -338,9 +442,12 @@ export default function Page() {
   });
 
   const filteredProductItems = productItems.filter((item) => {
-    const statusMatch =
-      filterProductStatus === "all" ||
-      getStockStatus(item.quantity) === filterProductStatus;
+    const threshold = getItemThreshold("product", item);
+    const statusMatch = matchesStatusFilter(
+      item.quantity,
+      threshold,
+      filterProductStatus,
+    );
     const categoryMatch =
       productCategoryFilter === "all" ||
       (item.category || "").toLowerCase() ===
@@ -393,24 +500,57 @@ export default function Page() {
     }
   };
 
-  const parcelStatusCounts = {
-    out: parcelItems.filter((item) => item.quantity === 0).length,
-    critical: parcelItems.filter(
-      (item) => item.quantity > 0 && item.quantity <= 5,
-    ).length,
-    low: parcelItems.filter((item) => item.quantity > 5 && item.quantity < 10)
-      .length,
-    available: parcelItems.filter((item) => item.quantity >= 10).length,
+  const countByStatus = (items = [], type) => {
+    return items.reduce(
+      (acc, item) => {
+        const qty = Number(item.quantity || 0);
+        const threshold = getItemThreshold(type, item);
+        const status = getStockStatus(qty, threshold);
+
+        if (qty <= 0) acc.out += 1;
+        if (qty > 0) acc.available += 1;
+        if (status === "critical") acc.critical += 1;
+        if (status === "low") acc.low += 1;
+
+        return acc;
+      },
+      { out: 0, critical: 0, low: 0, available: 0 },
+    );
   };
 
-  const productStatusCounts = {
-    out: productItems.filter((item) => item.quantity === 0).length,
-    critical: productItems.filter(
-      (item) => item.quantity > 0 && item.quantity <= 5,
-    ).length,
-    low: productItems.filter((item) => item.quantity > 5 && item.quantity < 10)
-      .length,
-    available: productItems.filter((item) => item.quantity >= 10).length,
+  const parcelStatusCounts = countByStatus(parcelItems, "parcel");
+  const productStatusCounts = countByStatus(productItems, "product");
+
+  const openThresholdModal = (type, item) => {
+    setThresholdTarget({ type, item });
+    setShowThresholdModal(true);
+  };
+
+  const closeThresholdModal = () => {
+    setShowThresholdModal(false);
+    setThresholdTarget(null);
+  };
+
+  const saveThresholdForTarget = ({ critical, low }) => {
+    if (!thresholdTarget?.item) return;
+    const key = getThresholdKey(thresholdTarget.type, thresholdTarget.item);
+    const safe = sanitizeThresholds({ critical, low });
+    setItemThresholds((prev) => ({
+      ...prev,
+      [key]: safe,
+    }));
+    closeThresholdModal();
+  };
+
+  const resetThresholdForTarget = () => {
+    if (!thresholdTarget?.item) return;
+    const key = getThresholdKey(thresholdTarget.type, thresholdTarget.item);
+    setItemThresholds((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+    closeThresholdModal();
   };
 
   // ===================== IMPORT FUNCTIONS =====================
@@ -1167,7 +1307,7 @@ export default function Page() {
                     <span
                       className={`text-xs px-2 py-1 rounded-full ${darkMode ? "bg-[#22C55E]/20" : "bg-[#DCFCE7]"} text-[#22C55E]`}
                     >
-                      Good
+                      In-Stock
                     </span>
                   </div>
                   <p
@@ -1313,9 +1453,15 @@ export default function Page() {
                             </td>
                             <td className="px-4 py-3 text-sm font-medium align-top">
                               <div className="flex items-start gap-2 min-w-0">
-                                <div
-                                  className={`w-2 h-2 rounded-full ${getIndicatorColor(item.quantity)}`}
-                                />
+                                {(() => {
+                                  const parcelQty = getDisplayedQuantity("parcel", item);
+                                  const parcelThreshold = getItemThreshold("parcel", item);
+                                  return (
+                                    <div
+                                      className={`w-2 h-2 rounded-full ${getIndicatorColor(parcelQty, parcelThreshold)}`}
+                                    />
+                                  );
+                                })()}
                                 <span className="break-words whitespace-normal">
                                   {item.name}
                                 </span>
@@ -1433,30 +1579,51 @@ export default function Page() {
                               {getDisplayedQuantity("parcel", item)} units
                             </td>
                             <td className="px-4 py-3 text-sm">
-                              <span
-                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(getDisplayedQuantity("parcel", item), darkMode)}`}
-                              >
-                                {getStatusIcon(getDisplayedQuantity("parcel", item))}
-                                {getStatusLabel(getDisplayedQuantity("parcel", item))}
-                              </span>
+                              {(() => {
+                                const parcelQty = getDisplayedQuantity("parcel", item);
+                                const parcelThreshold = getItemThreshold("parcel", item);
+                                return (
+                                  <span
+                                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(parcelQty, darkMode, parcelThreshold)}`}
+                                  >
+                                    {getStatusIcon(parcelQty, parcelThreshold)}
+                                    {getStatusLabel(parcelQty, parcelThreshold)}
+                                  </span>
+                                );
+                              })()}
                             </td>
                             <td className="px-4 py-3 text-sm">{item.date}</td>
                             <td className="px-4 py-3 text-sm">
                               <div className="flex items-center gap-2">
                                 {isAdmin ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => openHistoryModal("parcel", item)}
-                                    className={`inline-flex items-center justify-center p-2 rounded-lg border transition ${
-                                      darkMode
-                                        ? "border-[#374151] hover:bg-[#374151] text-blue-300"
-                                        : "border-[#D1D5DB] hover:bg-[#EFF6FF] text-[#1D4ED8]"
-                                    }`}
-                                    title="View stock history"
-                                    aria-label="View stock history"
-                                  >
-                                    <Search className="w-4 h-4" />
-                                  </button>
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => openHistoryModal("parcel", item)}
+                                      className={`inline-flex items-center justify-center p-2 rounded-lg border transition ${
+                                        darkMode
+                                          ? "border-[#374151] hover:bg-[#374151] text-blue-300"
+                                          : "border-[#D1D5DB] hover:bg-[#EFF6FF] text-[#1D4ED8]"
+                                      }`}
+                                      title="View stock history"
+                                      aria-label="View stock history"
+                                    >
+                                      <Search className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => openThresholdModal("parcel", item)}
+                                      className={`inline-flex items-center justify-center p-2 rounded-lg border transition ${
+                                        darkMode
+                                          ? "border-[#374151] hover:bg-[#374151] text-amber-300"
+                                          : "border-[#D1D5DB] hover:bg-[#FFFBEB] text-[#B45309]"
+                                      }`}
+                                      title="Set stock thresholds"
+                                      aria-label="Set stock thresholds"
+                                    >
+                                      <BarChart3 className="w-4 h-4" />
+                                    </button>
+                                  </>
                                 ) : null}
                                 {item.quantity === 0 ? (
                                   <Link
@@ -1468,13 +1635,6 @@ export default function Page() {
                                   </Link>
                                 ) : null}
                                 {!isAdmin && item.quantity !== 0 ? "-" : null}
-                                {isAdmin && item.quantity !== 0 ? (
-                                  <span
-                                    className={darkMode ? "text-gray-500" : "text-gray-400"}
-                                  >
-                                    -
-                                  </span>
-                                ) : null}
                               </div>
                             </td>
                           </tr>
@@ -1570,7 +1730,7 @@ export default function Page() {
                     <span
                       className={`text-xs px-2 py-1 rounded-full ${darkMode ? "bg-[#22C55E]/20" : "bg-[#DCFCE7]"} text-[#22C55E]`}
                     >
-                      Good
+                      In-Stock
                     </span>
                   </div>
                   <p
@@ -1716,9 +1876,15 @@ export default function Page() {
                             </td>
                             <td className="px-4 py-3 text-sm font-medium align-top">
                               <div className="flex items-start gap-2 min-w-0">
-                                <div
-                                  className={`w-2 h-2 rounded-full ${getIndicatorColor(item.quantity)}`}
-                                />
+                                {(() => {
+                                  const productQty = getDisplayedQuantity("product", item);
+                                  const productThreshold = getItemThreshold("product", item);
+                                  return (
+                                    <div
+                                      className={`w-2 h-2 rounded-full ${getIndicatorColor(productQty, productThreshold)}`}
+                                    />
+                                  );
+                                })()}
                                 <span className="break-words whitespace-normal">
                                   {item.product_name}
                                 </span>
@@ -1906,30 +2072,51 @@ export default function Page() {
                               {getDisplayedQuantity("product", item)} units
                             </td>
                             <td className="px-4 py-3 text-sm">
-                              <span
-                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(getDisplayedQuantity("product", item), darkMode)}`}
-                              >
-                                {getStatusIcon(getDisplayedQuantity("product", item))}
-                                {getStatusLabel(getDisplayedQuantity("product", item))}
-                              </span>
+                              {(() => {
+                                const productQty = getDisplayedQuantity("product", item);
+                                const productThreshold = getItemThreshold("product", item);
+                                return (
+                                  <span
+                                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(productQty, darkMode, productThreshold)}`}
+                                  >
+                                    {getStatusIcon(productQty, productThreshold)}
+                                    {getStatusLabel(productQty, productThreshold)}
+                                  </span>
+                                );
+                              })()}
                             </td>
                             <td className="px-4 py-3 text-sm">{item.date}</td>
                             <td className="px-4 py-3 text-sm">
                               <div className="flex items-center gap-2">
                                 {isAdmin ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => openHistoryModal("product", item)}
-                                    className={`inline-flex items-center justify-center p-2 rounded-lg border transition ${
-                                      darkMode
-                                        ? "border-[#374151] hover:bg-[#374151] text-violet-300"
-                                        : "border-[#D1D5DB] hover:bg-[#F5F3FF] text-[#6D28D9]"
-                                    }`}
-                                    title="View stock history"
-                                    aria-label="View stock history"
-                                  >
-                                    <Search className="w-4 h-4" />
-                                  </button>
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => openHistoryModal("product", item)}
+                                      className={`inline-flex items-center justify-center p-2 rounded-lg border transition ${
+                                        darkMode
+                                          ? "border-[#374151] hover:bg-[#374151] text-violet-300"
+                                          : "border-[#D1D5DB] hover:bg-[#F5F3FF] text-[#6D28D9]"
+                                      }`}
+                                      title="View stock history"
+                                      aria-label="View stock history"
+                                    >
+                                      <Search className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => openThresholdModal("product", item)}
+                                      className={`inline-flex items-center justify-center p-2 rounded-lg border transition ${
+                                        darkMode
+                                          ? "border-[#374151] hover:bg-[#374151] text-amber-300"
+                                          : "border-[#D1D5DB] hover:bg-[#FFFBEB] text-[#B45309]"
+                                      }`}
+                                      title="Set stock thresholds"
+                                      aria-label="Set stock thresholds"
+                                    >
+                                      <BarChart3 className="w-4 h-4" />
+                                    </button>
+                                  </>
                                 ) : null}
                                 {item.quantity === 0 ? (
                                   <Link
@@ -1941,13 +2128,6 @@ export default function Page() {
                                   </Link>
                                 ) : null}
                                 {!isAdmin && item.quantity !== 0 ? "-" : null}
-                                {isAdmin && item.quantity !== 0 ? (
-                                  <span
-                                    className={darkMode ? "text-gray-500" : "text-gray-400"}
-                                  >
-                                    -
-                                  </span>
-                                ) : null}
                               </div>
                             </td>
                           </tr>
@@ -1971,6 +2151,21 @@ export default function Page() {
           productOutItems={productOutItems}
           onClose={closeHistoryModal}
           onPreviewChange={setTimeframePreview}
+        />
+
+        <StockThresholdModal
+          open={showThresholdModal && Boolean(thresholdTarget)}
+          darkMode={darkMode}
+          thresholdTarget={thresholdTarget}
+          defaultThresholds={DEFAULT_STOCK_THRESHOLDS}
+          currentThreshold={
+            thresholdTarget
+              ? getItemThreshold(thresholdTarget.type, thresholdTarget.item)
+              : DEFAULT_STOCK_THRESHOLDS
+          }
+          onClose={closeThresholdModal}
+          onSave={saveThresholdForTarget}
+          onReset={resetThresholdForTarget}
         />
 
         {showExportModal && (

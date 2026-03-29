@@ -66,7 +66,7 @@ export default function LoginPage() {
           .toString()
           .toLowerCase();
         if (role === "staff") {
-          router.push("/view/product-in");
+          router.push("/view/dashboard");
           return;
         }
         router.push("/view/dashboard");
