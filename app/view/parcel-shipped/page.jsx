@@ -2,27 +2,24 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import AuthGuard from "../../components/AuthGuard";
 import TopNavbar from "../../components/TopNavbar";
 import Sidebar from "../../components/Sidebar";
-import { useSearchParams } from "next/navigation";
-import {
-  PackageCheck,
-  Plus,
-  Clock,
-  Calendar,
-  Package,
-  ChevronLeft,
-  ChevronRight,
-  X,
-} from "lucide-react";
+import { PackageOpen, Plus, Clock, Calendar, Package, X } from "lucide-react";
 import "animate.css";
 import {
   fetchParcelItems,
   handleAddParcelIn,
 } from "../../utils/parcelShippedHelper";
-import AuthGuard from "../../components/AuthGuard";
-import { products } from "../../utils/productsData";
+import { fetchParcelOutItems } from "../../utils/parcelOutHelper";
 import { CATEGORIES, CATEGORY_OPTIONS, getCategoryColor, getCategoryIcon } from "../../utils/categoryUtils";
+import { useSearchParams } from "next/navigation";
+import {
+  PackageCheck,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
+import { products } from "../../utils/productsData";
 
 export default function Page() {
   const searchParams = useSearchParams();
@@ -51,42 +48,67 @@ export default function Page() {
   const [timeHour, setTimeHour] = useState("1");
   const [timeMinute, setTimeMinute] = useState("00");
   const [timeAMPM, setTimeAMPM] = useState("AM");
-  
-  const [itemSuggestions, setItemSuggestions] = useState([]);
 
-  useEffect(() => {
-    if (itemParam) {
-      setParcelRows(prev => prev.map(row => 
-        row.id === 1 ? { ...row, name: itemParam } : row
-      ));
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  // Helper functions for multi-product management
+  const addParcelRow = () => {
+    const newId = Math.max(...parcelRows.map(row => row.id)) + 1;
+    setParcelRows([
+      ...parcelRows,
+      {
+        id: newId,
+        name: "",
+        quantity: 1,
+        price: "",
+        category: CATEGORIES.ELECTRONICS,
+        shippingMode: "",
+        clientName: "",
+      }
+    ]);
+  };
+
+  const removeParcelRow = (id) => {
+    if (parcelRows.length > 1) {
+      setParcelRows(parcelRows.filter(row => row.id !== id));
     }
-  }, [itemParam]);
+  };
 
-  // Calculate total price for all parcels
+  const updateParcelRow = (id, field, value) => {
+    setParcelRows(parcelRows.map(row => {
+      if (row.id === id) {
+        const updatedRow = { ...row, [field]: value };
+        
+        // Reset quantity to 1 when item changes
+        if (field === 'name') {
+          updatedRow.quantity = 1;
+        }
+        
+        return updatedRow;
+      }
+      return row;
+    }));
+  };
+
   const calculateTotalPrice = () => {
     return parcelRows.reduce((total, row) => {
-      const quantity = parseInt(row.quantity) || 0;
-      const price = parseFloat(row.price) || 0;
-      return total + (price * quantity);
+      const quantityToAdd = parseInt(row.quantity) || 0;
+      const computedTotalPrice = (parseFloat(row.price) || 0) * quantityToAdd;
+      return total + computedTotalPrice;
     }, 0);
   };
 
-  const [totalPrice, setTotalPrice] = useState(0);
-
-  useEffect(() => {
-    setTotalPrice(calculateTotalPrice());
-  }, [parcelRows]);
-
-  // Calculate unique items (count of distinct item names)
-  const getUniqueItemCount = (itemsList) => {
-    const uniqueNames = new Set(itemsList.map(item => item.name).filter(Boolean));
-    return uniqueNames.size;
+  // Helper function for conditional styling
+  const getClassName = (darkMode, darkClass, lightClass) => {
+    return darkMode ? darkClass : lightClass;
   };
 
-  const uniqueItemCount = getUniqueItemCount(items);
-
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(5);
+  const loadItems = async () => {
+    const inItems = await fetchParcelItems();
+    setItems(inItems);
+  };
 
   useEffect(() => {
     const savedDarkMode = localStorage.getItem("darkMode");
@@ -105,49 +127,6 @@ export default function Page() {
     setTimeAMPM(ampm);
     loadItems();
   }, []);
-
-  const loadItems = async () => {
-    const data = await fetchParcelItems();
-    setItems(
-      data
-        .map((item) => ({ ...item, quantity: Number(item.quantity || 0) }))
-        .filter((item) => item.quantity > 0)
-        .sort((a, b) => b.quantity - a.quantity),
-    );
-
-    const existingNames = data.map((item) => item.name).filter(Boolean);
-    const unique = Array.from(new Set(existingNames)).sort();
-    setItemSuggestions(unique);
-  };
-
-  // Functions to manage parcel rows
-  const addParcelRow = () => {
-    const newId = Math.max(...parcelRows.map(row => row.id), 0) + 1;
-    setParcelRows(prev => [...prev, {
-      id: newId,
-      name: "",
-      quantity: 1,
-      price: "",
-      category: CATEGORIES.ELECTRONICS,
-      shippingMode: "",
-      clientName: "",
-    }]);
-  };
-
-  const removeParcelRow = (idToRemove) => {
-    if (parcelRows.length > 1) {
-      setParcelRows(prev => prev.filter(row => row.id !== idToRemove));
-    }
-  };
-
-  const updateParcelRow = (id, field, value) => {
-    setParcelRows(prev => prev.map(row => {
-      if (row.id === id) {
-        return { ...row, [field]: value };
-      }
-      return row;
-    }));
-  };
 
   const formatTo12Hour = (time) => {
     if (!time) return "";
@@ -229,116 +208,69 @@ export default function Page() {
     if (currentPage > 1) setCurrentPage(currentPage - 1);
   };
 
-  const getPageNumbers = () => {
-    const pageNumbers = [];
-    const maxPagesToShow = 5;
-
-    if (totalPages <= maxPagesToShow) {
-      for (let i = 1; i <= totalPages; i++) pageNumbers.push(i);
-    } else {
-      if (currentPage <= 3) {
-        for (let i = 1; i <= 4; i++) pageNumbers.push(i);
-        pageNumbers.push("...");
-        pageNumbers.push(totalPages);
-      } else if (currentPage >= totalPages - 2) {
-        pageNumbers.push(1);
-        pageNumbers.push("...");
-        for (let i = totalPages - 3; i <= totalPages; i++) pageNumbers.push(i);
-      } else {
-        pageNumbers.push(1);
-        pageNumbers.push("...");
-        for (let i = currentPage - 1; i <= currentPage + 1; i++)
-          pageNumbers.push(i);
-        pageNumbers.push("...");
-        pageNumbers.push(totalPages);
-      }
-    }
-
-    return pageNumbers;
-  };
-
-  const getClassName = (darkMode, darkClass, lightClass) => {
-    return darkMode ? darkClass : lightClass;
-  };
-
   return (
     <AuthGuard darkMode={darkMode}>
       <div
-        className={getClassName(
-          darkMode,
-          "flex flex-col w-full h-screen overflow-hidden dark bg-[#0B0B0B] text-white",
-          "flex flex-col w-full h-screen overflow-hidden bg-[#F9FAFB] text-black"
-        )}
+        className={`min-h-screen transition-colors duration-300 ${
+          darkMode ? "bg-[#111827] text-white" : "bg-[#F3F4F6] text-black"
+        }`}
       >
-        {/* Navbar */}
-        <div
-          className={getClassName(
-            darkMode,
-            "fixed top-0 left-0 right-0 z-50 backdrop-blur-xl border-b shadow-sm animate__animated animate__fadeInDown animate__faster bg-[#111827]/90 border-[#374151]",
-            "fixed top-0 left-0 right-0 z-50 backdrop-blur-xl border-b shadow-sm animate__animated animate__fadeInDown animate__faster bg-white/90 border-[#E5E7EB]"
-          )}
-        >
-          <TopNavbar
-            sidebarOpen={sidebarOpen}
-            setSidebarOpen={setSidebarOpen}
-            darkMode={darkMode}
-            setDarkMode={setDarkMode}
-          />
-        </div>
+        {/* Top Navbar */}
+        <TopNavbar
+          sidebarOpen={sidebarOpen}
+          setSidebarOpen={setSidebarOpen}
+          darkMode={darkMode}
+          setDarkMode={setDarkMode}
+        />
 
         {/* Sidebar */}
         <Sidebar
           sidebarOpen={sidebarOpen}
           setSidebarOpen={setSidebarOpen}
+          activeTab="parcel-shipped"
           darkMode={darkMode}
         />
 
-        {/* Main */}
+        {/* Main Content */}
         <main
-          className={getClassName(
-            darkMode,
-            "flex-1 overflow-y-auto pt-20 transition-all duration-300 bg-[#0B0B0B]",
-            "flex-1 overflow-y-auto pt-20 transition-all duration-300 bg-[#F9FAFB]"
-          )}
+          className={`flex-1 overflow-y-auto pt-20 transition-all duration-300 ease-in-out ${
+            sidebarOpen ? "lg:ml-64" : "lg:ml-0"
+          } ${darkMode ? "bg-[#0B0B0B]" : "bg-[#F9FAFB]"}`}
         >
-          <div className="max-w-[1200px] mx-auto px-6 py-8">
+          <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
             {/* Header */}
             <div className="mb-10 animate__animated animate__fadeInDown animate__faster">
               <div className="flex items-center justify-center gap-4 mb-2">
                 <div
-                  className={getClassName(
-                    darkMode,
-                    "flex-1 h-[2px] bg-[#374151]",
-                    "flex-1 h-[2px] bg-[#D1D5DB]"
-                  )}
+                  className={`flex-1 h-[2px] ${
+                    darkMode ? "bg-[#374151]" : "bg-[#D1D5DB]"
+                  }`}
                 ></div>
                 <div className="flex items-center gap-2 px-3">
-                  <PackageCheck
-                    className={getClassName(
-                      darkMode,
-                      "w-6 h-6 text-[#3B82F6]",
-                      "w-6 h-6 text-[#1E3A8A]"
-                    )}
+                  <PackageOpen
+                    className={`w-6 h-6 ${
+                      darkMode ? "text-[#F97316]" : "text-[#EA580C]"
+                    }`}
                   />
-                  <h1 className="text-3xl font-bold tracking-wide">Stock In</h1>
+                  <h1 className="text-3xl font-bold tracking-wide">
+                    Stock In
+                  </h1>
                 </div>
                 <div
-                  className={getClassName(
-                    darkMode,
-                    "flex-1 h-[2px] bg-[#374151]",
-                    "flex-1 h-[2px] bg-[#D1D5DB]"
-                  )}
+                  className={`flex-1 h-[2px] ${
+                    darkMode ? "bg-[#374151]" : "bg-[#D1D5DB]"
+                  }`}
                 ></div>
               </div>
-              <p
-                className={getClassName(
-                  darkMode,
-                  "text-center text-sm text-[#9CA3AF]",
-                  "text-center text-sm text-[#6B7280]"
-                )}
-              >
-                Record new items delivered to your inventory
-              </p>
+              <div className="text-center">
+                <p
+                  className={`text-sm ${
+                    darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"
+                  }`}
+                >
+                  Record items coming into your inventory
+                </p>
+              </div>
             </div>
 
             {/* Form */}
@@ -350,7 +282,7 @@ export default function Page() {
                 "p-6 rounded-xl shadow-lg mb-8 border transition animate__animated animate__fadeInUp animate__faster bg-white border-[#E5E7EB] text-[#111827]"
               )}
             >
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-2 mb-6">
                 <div className="flex items-center gap-2">
                   <Plus
                     className={getClassName(
@@ -359,19 +291,88 @@ export default function Page() {
                       "w-5 h-5 text-[#1E3A8A]"
                     )}
                   />
-                  <h2 className="text-lg font-semibold">Items to Add</h2>
+                  <h2 className="text-lg font-semibold">Items to In</h2>
                 </div>
-                <button
-                  type="button"
-                  onClick={addParcelRow}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
-                >
-                  <Plus className="w-4 h-4" /> Add Item Row
-                </button>
               </div>
 
-              {/* Parcel Rows */}
-              <div className="space-y-4">
+              {/* Date and Time (shared for all items) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4 mb-6">
+                <div className="flex flex-col">
+                  <label className={getClassName(
+                    darkMode,
+                    "text-sm font-medium mb-2 text-gray-300",
+                    "text-sm font-medium mb-2 text-gray-700"
+                  )}>
+                    <Calendar className="w-4 h-4 inline mr-1" /> Date
+                  </label>
+                  <input
+                    type="date"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    className={getClassName(
+                      darkMode,
+                      "border rounded-lg px-3 py-2.5 w-full focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                      "border rounded-lg px-3 py-2.5 w-full focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                    )}
+                    required
+                  />
+                </div>
+
+                <div className="flex flex-col">
+                  <label className={getClassName(
+                    darkMode,
+                    "text-sm font-medium mb-2 text-gray-300",
+                    "text-sm font-medium mb-2 text-gray-700"
+                  )}>
+                    <Clock className="w-4 h-4 inline mr-1" /> Time In
+                  </label>
+                  <div className="flex gap-2">
+                    <select
+                      value={timeHour}
+                      onChange={(e) => setTimeHour(e.target.value)}
+                      className={getClassName(
+                        darkMode,
+                        "border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                        "border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                      )}
+                    >
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map((hour) => (
+                        <option key={hour} value={hour}>{hour}</option>
+                      ))}
+                    </select>
+                    <span className="self-center">:</span>
+                    <select
+                      value={timeMinute}
+                      onChange={(e) => setTimeMinute(e.target.value)}
+                      className={getClassName(
+                        darkMode,
+                        "border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                        "border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                      )}
+                    >
+                      <option value="00">00</option>
+                      <option value="15">15</option>
+                      <option value="30">30</option>
+                      <option value="45">45</option>
+                    </select>
+                    <select
+                      value={timeAMPM}
+                      onChange={(e) => setTimeAMPM(e.target.value)}
+                      className={getClassName(
+                        darkMode,
+                        "border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                        "border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                      )}
+                    >
+                      <option value="AM">AM</option>
+                      <option value="PM">PM</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Multi-product rows */}
+              <div className="space-y-4 mb-6">
                 {parcelRows.map((row, index) => (
                   <div
                     key={row.id}
@@ -393,50 +394,48 @@ export default function Page() {
                         <button
                           type="button"
                           onClick={() => removeParcelRow(row.id)}
-                          className="text-red-500 hover:text-red-700 transition-colors"
+                          className={getClassName(
+                            darkMode,
+                            "p-1 rounded hover:bg-red-900/20 text-red-400 transition-colors",
+                            "p-1 rounded hover:bg-red-100 text-red-600 transition-colors"
+                          )}
                         >
                           <X className="w-4 h-4" />
                         </button>
                       )}
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                       {/* Item Name */}
-                      <div>
-                        <label
-                          className={getClassName(
-                            darkMode,
-                            "text-sm font-medium mb-2 flex items-center gap-1.5 text-[#D1D5DB]",
-                            "text-sm font-medium mb-2 flex items-center gap-1.5 text-[#374151]"
-                          )}
-                        >
-                          <Package className="w-4 h-4" /> Item Name
+                      <div className="flex flex-col">
+                        <label className={getClassName(
+                          darkMode,
+                          "text-xs font-medium mb-1 text-gray-400",
+                          "text-xs font-medium mb-1 text-gray-600"
+                        )}>
+                          Item Name
                         </label>
                         <input
                           type="text"
-                          placeholder="Item name"
                           value={row.name}
                           onChange={(e) => updateParcelRow(row.id, 'name', e.target.value)}
-                          list="stock-in-suggestions"
                           className={getClassName(
                             darkMode,
-                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white",
-                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
+                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
                           )}
                           required
                         />
                       </div>
 
                       {/* Quantity */}
-                      <div>
-                        <label
-                          className={getClassName(
-                            darkMode,
-                            "text-sm font-medium mb-2 flex items-center gap-1.5 text-[#D1D5DB]",
-                            "text-sm font-medium mb-2 flex items-center gap-1.5 text-[#374151]"
-                          )}
-                        >
-                          <Package className="w-4 h-4" /> Quantity
+                      <div className="flex flex-col">
+                        <label className={getClassName(
+                          darkMode,
+                          "text-xs font-medium mb-1 text-gray-400",
+                          "text-xs font-medium mb-1 text-gray-600"
+                        )}>
+                          Quantity
                         </label>
                         <input
                           type="number"
@@ -445,217 +444,105 @@ export default function Page() {
                           onChange={(e) => updateParcelRow(row.id, 'quantity', e.target.value)}
                           className={getClassName(
                             darkMode,
-                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white",
-                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
-                          )}
-                          required
-                        />
-                      </div>
-
-                      {/* Price */}
-                      <div>
-                        <label
-                          className={getClassName(
-                            darkMode,
-                            "text-sm font-medium mb-2 flex items-center gap-1.5 text-[#D1D5DB]",
-                            "text-sm font-medium mb-2 flex items-center gap-1.5 text-[#374151]"
-                          )}
-                        >
-                          <Package className="w-4 h-4" /> Price
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={row.price}
-                          onChange={(e) => updateParcelRow(row.id, 'price', e.target.value)}
-                          placeholder="0.00"
-                          className={getClassName(
-                            darkMode,
-                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white",
-                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
+                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
                           )}
                           required
                         />
                       </div>
 
                       {/* Category */}
-                      <div>
-                        <label
-                          className={getClassName(
-                            darkMode,
-                            "text-sm font-medium mb-2 flex items-center gap-1.5 text-[#D1D5DB]",
-                            "text-sm font-medium mb-2 flex items-center gap-1.5 text-[#374151]"
-                          )}
-                        >
-                          <Package className="w-4 h-4" /> Category
+                      <div className="flex flex-col">
+                        <label className={getClassName(
+                          darkMode,
+                          "text-xs font-medium mb-1 text-gray-400",
+                          "text-xs font-medium mb-1 text-gray-600"
+                        )}>
+                          Category
                         </label>
                         <select
                           value={row.category}
                           onChange={(e) => updateParcelRow(row.id, 'category', e.target.value)}
                           className={getClassName(
                             darkMode,
-                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white",
-                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
+                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
                           )}
-                          required
                         >
-                          {CATEGORY_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
+                          {CATEGORY_OPTIONS.map((cat) => (
+                            <option key={cat.value} value={cat.value}>
+                              {cat.label}
                             </option>
                           ))}
                         </select>
                       </div>
-                    </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                      {/* Shipping Mode */}
-                      <div>
-                        <label
+                      {/* Price */}
+                      <div className="flex flex-col">
+                        <label className={getClassName(
+                          darkMode,
+                          "text-xs font-medium mb-1 text-gray-400",
+                          "text-xs font-medium mb-1 text-gray-600"
+                        )}>
+                          Price per Unit
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={row.price}
+                          onChange={(e) => updateParcelRow(row.id, 'price', e.target.value)}
                           className={getClassName(
                             darkMode,
-                            "text-sm font-medium mb-2 text-[#D1D5DB]",
-                            "text-sm font-medium mb-2 text-[#374151]"
+                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
                           )}
-                        >
+                        />
+                      </div>
+
+                      {/* Shipping Mode */}
+                      <div className="flex flex-col">
+                        <label className={getClassName(
+                          darkMode,
+                          "text-xs font-medium mb-1 text-gray-400",
+                          "text-xs font-medium mb-1 text-gray-600"
+                        )}>
                           Shipping Mode
                         </label>
                         <input
                           type="text"
                           value={row.shippingMode}
                           onChange={(e) => updateParcelRow(row.id, 'shippingMode', e.target.value)}
-                          placeholder="Shopee (J&T)"
                           className={getClassName(
                             darkMode,
-                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white",
-                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
+                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
                           )}
                         />
                       </div>
 
                       {/* Client Name */}
-                      <div>
-                        <label
-                          className={getClassName(
-                            darkMode,
-                            "text-sm font-medium mb-2 text-[#D1D5DB]",
-                            "text-sm font-medium mb-2 text-[#374151]"
-                          )}
-                        >
+                      <div className="flex flex-col">
+                        <label className={getClassName(
+                          darkMode,
+                          "text-xs font-medium mb-1 text-gray-400",
+                          "text-xs font-medium mb-1 text-gray-600"
+                        )}>
                           Client Name
                         </label>
                         <input
                           type="text"
                           value={row.clientName}
                           onChange={(e) => updateParcelRow(row.id, 'clientName', e.target.value)}
-                          placeholder="Client name"
                           className={getClassName(
                             darkMode,
-                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white",
-                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
+                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
                           )}
                         />
                       </div>
                     </div>
                   </div>
                 ))}
-              </div>
-
-              {/* Common Date and Time Section */}
-              <div className="mb-6">
-                <h3 className={getClassName(
-                  darkMode,
-                  "text-lg font-semibold mb-4 text-white",
-                  "text-lg font-semibold mb-4 text-gray-900"
-                )}>
-                  Date and Time (applies to all items)
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Date */}
-                  <div>
-                    <label
-                      className={getClassName(
-                        darkMode,
-                        "text-sm font-medium mb-2 flex items-center gap-1.5 text-[#D1D5DB]",
-                        "text-sm font-medium mb-2 flex items-center gap-1.5 text-[#374151]"
-                      )}
-                    >
-                      <Calendar className="w-4 h-4" /> Date
-                    </label>
-                    <input
-                      type="date"
-                      value={date}
-                      onChange={(e) => setDate(e.target.value)}
-                      className={getClassName(
-                        darkMode,
-                        "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white min-w-[180px]",
-                        "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black min-w-[180px]"
-                      )}
-                      required
-                    />
-                  </div>
-
-                  {/* Time */}
-                  <div>
-                    <label
-                      className={getClassName(
-                        darkMode,
-                        "text-sm font-medium mb-2 flex items-center gap-1.5 text-[#D1D5DB]",
-                        "text-sm font-medium mb-2 flex items-center gap-1.5 text-[#374151]"
-                      )}
-                    >
-                      <Clock className="w-4 h-4" /> Time In
-                    </label>
-                    <div className="flex gap-3">
-                      <select
-                        value={timeHour}
-                        onChange={(e) => setTimeHour(e.target.value)}
-                        className={getClassName(
-                          darkMode,
-                          "border rounded-lg px-3 py-2 flex-1 min-w-[72px] focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white",
-                          "border rounded-lg px-3 py-2 flex-1 min-w-[72px] focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
-                        )}
-                      >
-                        {Array.from({ length: 12 }, (_, i) => (
-                          <option key={i} value={i + 1}>
-                            {i + 1}
-                          </option>
-                        ))}
-                      </select>
-                      <select
-                        value={timeMinute}
-                        onChange={(e) => setTimeMinute(e.target.value)}
-                        className={getClassName(
-                          darkMode,
-                          "border rounded-lg px-3 py-2 flex-1 min-w-[72px] focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white",
-                          "border rounded-lg px-3 py-2 flex-1 min-w-[72px] focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
-                        )}
-                      >
-                        {Array.from({ length: 60 }, (_, i) => {
-                          const val = i < 10 ? `0${i}` : `${i}`;
-                          return (
-                            <option key={i} value={val}>
-                              {val}
-                            </option>
-                          );
-                        })}
-                      </select>
-                      <select
-                        value={timeAMPM}
-                        onChange={(e) => setTimeAMPM(e.target.value)}
-                        className={getClassName(
-                          darkMode,
-                          "border rounded-lg px-3 py-2 w-[88px] min-w-[88px] shrink-0 focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white",
-                          "border rounded-lg px-3 py-2 w-[88px] min-w-[88px] shrink-0 focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
-                        )}
-                      >
-                        <option>AM</option>
-                        <option>PM</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
               </div>
 
               {/* Total Price Display */}
@@ -673,246 +560,220 @@ export default function Page() {
                     "text-xl font-bold text-green-400",
                     "text-xl font-bold text-green-600"
                   )}>
-                    ₱{totalPrice.toFixed(2)}
+                    ₱{calculateTotalPrice().toFixed(2)}
                   </span>
                 </div>
               </div>
 
-              <div className="flex justify-end">
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={addParcelRow}
+                  className={getClassName(
+                    darkMode,
+                    "inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors",
+                    "inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                  )}
+                >
+                  <Plus className="w-4 h-4" /> Add Item Row
+                </button>
                 <button
                   type="submit"
-                  className="bg-[#1E3A8A] hover:bg-[#1D4ED8] text-white px-6 py-2.5 rounded-lg font-medium flex items-center gap-2 shadow-md transition-all duration-200 hover:shadow-lg"
+                  className={getClassName(
+                    darkMode,
+                    "inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-medium transition-colors",
+                    "inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-black px-6 py-2.5 rounded-lg font-medium transition-colors"
+                  )}
                 >
-                  <Plus className="w-5 h-5" /> Add All Items ({parcelRows.filter(row => row.name && row.quantity).length})
+                  <Plus className="w-5 h-5" /> In {parcelRows.length} {parcelRows.length === 1 ? 'Item' : 'Items'}
                 </button>
               </div>
             </form>
 
-            {/* Product Suggestions Datalist */}
-            <datalist id="stock-in-suggestions">
-              {itemSuggestions.map((suggestion) => (
-                <option key={suggestion} value={suggestion} />
-              ))}
-            </datalist>
-
-            {/* Stats */}
+            {/* Table */}
             <div
-              className={getClassName(
-                darkMode,
-                "mb-6 flex justify-between p-4 rounded-lg shadow animate__animated animate__fadeInUp animate__fast bg-[#1F2937] text-white border border-[#374151]",
-                "mb-6 flex justify-between p-4 rounded-lg shadow animate__animated animate__fadeInUp animate__fast bg-white text-[#111827] border border-[#E5E7EB]"
-              )}
+              className={`rounded-xl shadow-lg overflow-hidden border animate__animated animate__fadeInDown ${
+                darkMode
+                  ? "bg-[#1F2937] border-[#374151]"
+                  : "bg-white border-[#E5E7EB]"
+              }`}
             >
-              <div className="font-medium">
-                Unique Items: <span className="font-bold">{uniqueItemCount}</span>
-              </div>
-              <div className="font-medium">
-                Total Quantity:{" "}
-                <span className="font-bold">
-                  {items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)}
-                </span>
-              </div>
-            </div>
-
-            {/* Items Table */}
-            <div
-              className={getClassName(
-                darkMode,
-                "rounded-xl shadow-lg overflow-hidden animate__animated animate__fadeInUp animate__fast bg-[#1F2937] border border-[#374151]",
-                "rounded-xl shadow-lg overflow-hidden animate__animated animate__fadeInUp animate__fast bg-white border border-[#E5E7EB]"
-              )}
-            >
-              <div className="overflow-x-auto">
-                <table className="w-full">
+              <div className="overflow-y-auto overflow-x-auto max-h-[600px]">
+                <table className="w-full min-w-[1050px] table-fixed">
                   <thead
-                    className={getClassName(
-                      darkMode,
-                      "bg-[#374151] text-white",
-                      "bg-gray-50 text-gray-900"
-                    )}
+                    className={`sticky top-0 z-10 ${
+                      darkMode
+                        ? "bg-[#111827] border-b border-[#374151]"
+                        : "bg-[#F9FAFB] border-b border-[#E5E7EB]"
+                    }`}
                   >
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">
-                        Item Name
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">
-                        Quantity
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">
-                        Date
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">
-                        Time
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">
-                        Shipping Mode
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">
-                        Client Name
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">
-                        Price
-                      </th>
+                      {[
+                        "Item Name",
+                        "Category",
+                        "Date",
+                        "Quantity",
+                        "Time In",
+                        "Shipping",
+                        "Client",
+                        "Price",
+                      ].map(
+                        (head) => (
+                          <th
+                            key={head}
+                            className={`px-4 sm:px-6 py-3 sm:py-4 text-center text-xs sm:text-sm font-semibold uppercase tracking-wider whitespace-nowrap ${
+                              darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
+                            }`}
+                          >
+                            {head}
+                          </th>
+                        ),
+                      )}
                     </tr>
                   </thead>
                   <tbody
-                    className={getClassName(
-                      darkMode,
-                      "divide-y divide-[#374151] text-white",
-                      "divide-y divide-gray-200 text-gray-900"
-                    )}
+                    className={`divide-y ${
+                      darkMode ? "divide-[#374151]" : "divide-[#E5E7EB]"
+                    }`}
                   >
-                    {currentItems.map((item, index) => (
-                      <tr
-                        key={index}
-                        className={getClassName(
-                          darkMode,
-                          "transition-colors hover:bg-[#374151]/20",
-                          "transition-colors hover:bg-gray-50"
-                        )}
-                      >
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <Package
-                              className={getClassName(
-                                darkMode,
-                                "w-4 h-4 mr-2 text-[#3B82F6]",
-                                "w-4 h-4 mr-2 text-[#1E3A8A]"
-                              )}
-                            />
-                            {item.name}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span
-                            className={getClassName(
-                              darkMode,
-                              "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-900/50 text-blue-300",
-                              "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
-                            )}
-                          >
-                            {item.quantity}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          {item.date}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          {formatTo12Hour(item.time)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          {item.shipping_mode || "-"}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          {item.client_name || "-"}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          ₱{Number(item.price || 0).toLocaleString()}
+                    {currentItems.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={8}
+                          className={`px-4 sm:px-6 py-12 sm:py-16 text-center ${
+                            darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"
+                          }`}
+                        >
+                          <PackageOpen
+                            className={`w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 animate__animated animate__bounce animate__infinite animate__slow ${
+                              darkMode ? "text-[#6B7280]" : "text-[#D1D5DB]"
+                            }`}
+                          />
+                          <p className="text-base sm:text-lg font-medium mb-1">
+                            No items added yet
+                          </p>
+                          <p className="text-xs sm:text-sm opacity-75">
+                            Add your first item using the form above
+                          </p>
                         </td>
                       </tr>
-                    ))}
+                    ) : (
+                      currentItems.map((item, index) => (
+                        <tr
+                          key={item.id}
+                          className={`transition-all duration-200 animate__animated animate__fadeInUp ${
+                            darkMode
+                              ? "hover:bg-[#374151]/40"
+                              : "hover:bg-[#F3F4F6]"
+                          }`}
+                          style={{ animationDelay: `${index * 0.1}s` }}
+                        >
+                          <td
+                            className={`px-4 sm:px-6 py-3 sm:py-4 text-center align-middle font-semibold text-sm sm:text-base break-words whitespace-normal ${
+                              darkMode ? "text-white" : "text-[#111827]"
+                            }`}
+                          >
+                            {item.name}
+                          </td>
+                          <td className="px-4 sm:px-6 py-3 sm:py-4 text-center align-middle">
+                            <span
+                              className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${getCategoryColor(item.category)}`}
+                            >
+                              <span className="mr-1">{getCategoryIcon(item.category)}</span>
+                              {item.category || 'Others'}
+                            </span>
+                          </td>
+                          <td
+                            className={`px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-center align-middle text-sm sm:text-base ${
+                              darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
+                            }`}
+                          >
+                            {item.date}
+                          </td>
+                          <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-center align-middle">
+                            <span
+                              className={`inline-flex items-center gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs sm:text-sm font-semibold ${
+                                darkMode
+                                  ? "bg-[#F97316]/20 text-[#F97316] border border-[#F97316]/30"
+                                  : "bg-[#FFEDD5] text-[#EA580C] border border-[#FED7AA]"
+                              }`}
+                            >
+                              {item.quantity} units
+                            </span>
+                          </td>
+                          <td
+                            className={`px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-center align-middle text-sm sm:text-base ${
+                              darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
+                            }`}
+                          >
+                            <div className="flex items-center justify-center gap-2">
+                              <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 opacity-50" />
+                              {formatTo12Hour(item.timeIn)}
+                            </div>
+                          </td>
+                          <td
+                            className={`px-4 sm:px-6 py-3 sm:py-4 text-center align-middle text-sm sm:text-base ${
+                              darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
+                            }`}
+                          >
+                            {item.shipping_mode || "-"}
+                          </td>
+                          <td
+                            className={`px-4 sm:px-6 py-3 sm:py-4 text-center align-middle text-sm sm:text-base ${
+                              darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
+                            }`}
+                          >
+                            {item.client_name || "-"}
+                          </td>
+                          <td
+                            className={`px-4 sm:px-6 py-3 sm:py-4 text-center align-middle text-sm sm:text-base ${
+                              darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
+                            }`}
+                          >
+                            {item.price !== null && item.price !== undefined
+                              ? `₱${Number(item.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                              : "-"}
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
+            </div>
 
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div
-                  className={getClassName(
-                    darkMode,
-                    "px-6 py-4 border-t border-[#374151] bg-[#1F2937]",
-                    "px-6 py-4 border-t border-gray-200 bg-gray-50"
-                  )}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm">
-                      <span
-                        className={getClassName(
-                          darkMode,
-                          "text-gray-400",
-                          "text-gray-700"
-                        )}
-                      >
-                        Showing {indexOfFirstItem + 1} to{" "}
-                        {Math.min(indexOfLastItem, items.length)} of{" "}
-                        {items.length} results
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={goToPrevPage}
-                        disabled={currentPage === 1}
-                        className={`p-2 rounded-lg border transition-colors ${
-                          currentPage === 1
-                            ? getClassName(
-                                darkMode,
-                                "border-gray-700 text-gray-600 cursor-not-allowed",
-                                "border-gray-300 text-gray-400 cursor-not-allowed"
-                              )
-                            : getClassName(
-                                darkMode,
-                                "border-gray-600 text-gray-300 hover:bg-gray-700",
-                                "border-gray-300 text-gray-700 hover:bg-gray-100"
-                              )
-                        }`}
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                      </button>
-                      <div className="flex space-x-1">
-                        {getPageNumbers().map((pageNum, index) => (
-                          <button
-                            key={index}
-                            onClick={() =>
-                              pageNum !== "..." && paginate(pageNum)
-                            }
-                            disabled={pageNum === "..."}
-                            className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                              pageNum === "..."
-                                ? getClassName(
-                                    darkMode,
-                                    "text-gray-600 cursor-default",
-                                    "text-gray-500 cursor-default"
-                                  )
-                                : pageNum === currentPage
-                                ? getClassName(
-                                    darkMode,
-                                    "bg-blue-600 text-white",
-                                    "bg-blue-600 text-white"
-                                  )
-                                : getClassName(
-                                    darkMode,
-                                    "text-gray-300 hover:bg-gray-700",
-                                    "text-gray-700 hover:bg-gray-100"
-                                  )
-                            }`}
-                          >
-                            {pageNum}
-                          </button>
-                        ))}
-                      </div>
-                      <button
-                        onClick={goToNextPage}
-                        disabled={currentPage === totalPages}
-                        className={`p-2 rounded-lg border transition-colors ${
-                          currentPage === totalPages
-                            ? getClassName(
-                                darkMode,
-                                "border-gray-700 text-gray-600 cursor-not-allowed",
-                                "border-gray-300 text-gray-400 cursor-not-allowed"
-                              )
-                            : getClassName(
-                                darkMode,
-                                "border-gray-600 text-gray-300 hover:bg-gray-700",
-                                "border-gray-300 text-gray-700 hover:bg-gray-100"
-                              )
-                        }`}
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
+            {/* Pagination */}
+            <div className="flex justify-center items-center gap-2 mt-6">
+              <button
+                onClick={goToPrevPage}
+                disabled={currentPage === 1}
+                className={`p-2 rounded-lg border transition-colors ${
+                  darkMode
+                    ? "border-[#374151] bg-[#1F2937] text-white hover:bg-[#374151] disabled:opacity-50 disabled:cursor-not-allowed"
+                    : "border-[#D1D5DB] bg-white text-[#374151] hover:bg-[#F3F4F6] disabled:opacity-50 disabled:cursor-not-allowed"
+                }`}
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              <span className={`px-3 py-1 rounded-lg text-sm font-medium ${
+                darkMode ? "bg-[#374151] text-white" : "bg-[#E5E7EB] text-[#374151]"
+              }`}>
+                Page {currentPage} of {totalPages}
+              </span>
+
+              <button
+                onClick={goToNextPage}
+                disabled={currentPage === totalPages}
+                className={`p-2 rounded-lg border transition-colors ${
+                  darkMode
+                    ? "border-[#374151] bg-[#1F2937] text-white hover:bg-[#374151] disabled:opacity-50 disabled:cursor-not-allowed"
+                    : "border-[#D1D5DB] bg-white text-[#374151] hover:bg-[#F3F4F6] disabled:opacity-50 disabled:cursor-not-allowed"
+                }`}
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
             </div>
           </div>
         </main>

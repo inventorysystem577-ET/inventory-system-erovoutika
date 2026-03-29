@@ -1,21 +1,43 @@
 // utils/parcelHelper.js
 import axios from "axios";
+import { DATABASE_CATEGORY_MAP } from "./categoryUtils.js";
 
 // Fetch all parcel-in items
 export const fetchParcelItems = async () => {
   try {
     const res = await axios.get("/api/parcelShipped");
-    return res.data.map((item) => ({
-      id: item.id,
-      name: item.item_name,
-      date: item.date,
-      quantity: item.quantity,
-      timeIn: item.time_in,
-      shipping_mode: item.shipping_mode,
-      client_name: item.client_name,
-      price: item.price,
-      category: item.category,
-    }));
+    return res.data.map((item) => {
+      // Reverse mapping from database category to display category
+      const reverseMap = {
+        'Component': 'Electronics',
+        'Product': 'Merchandise',
+        'Tool': 'Tools',
+        'Others': 'Others'
+      };
+      
+      // For new categories, check if they're already in correct format
+      const displayCategory = 
+        item.category === 'EROV_PRODUCT' || 
+        item.category === 'JSUMO_PRODUCT' || 
+        item.category === 'ZM_ROBO_PRODUCT' ||
+        item.category === 'Electronics' ||
+        item.category === 'Merchandise' ||
+        item.category === 'Components'
+          ? item.category 
+          : reverseMap[item.category] || item.category;
+          
+      return {
+        id: item.id,
+        name: item.item_name,
+        date: item.date,
+        quantity: item.quantity,
+        timeIn: item.time_in,
+        shipping_mode: item.shipping_mode,
+        client_name: item.client_name,
+        price: item.price,
+        category: displayCategory,
+      };
+    });
   } catch (err) {
     console.error(err);
     return [];
@@ -34,6 +56,9 @@ export const addParcelItem = async ({
   category,
 }) => {
   try {
+    // Map category to database-compatible value
+    const dbCategory = DATABASE_CATEGORY_MAP[category] || category;
+    
     const res = await axios.post("/api/parcelShipped", {
       item_name,
       date,
@@ -45,19 +70,18 @@ export const addParcelItem = async ({
         price === "" || price === null || price === undefined
           ? null
           : Number(price),
-      category: category || 'Others',
+      category: dbCategory, // Use mapped category for database
     });
-    const data = res.data;
     return {
-      id: data.id,
-      name: data.item_name,
-      date: data.date,
-      quantity: data.quantity,
-      timeIn: data.time_in,
-      shipping_mode: data.shipping_mode,
-      client_name: data.client_name,
-      price: data.price,
-      category: data.category,
+      id: res.data.id,
+      name: res.data.item_name,
+      date: res.data.date,
+      quantity: res.data.quantity,
+      timeIn: res.data.time_in,
+      shipping_mode: res.data.shipping_mode,
+      client_name: res.data.client_name,
+      price: res.data.price,
+      category: category, // Keep original category for display
     };
   } catch (err) {
     console.error(err.response?.data || err.message);

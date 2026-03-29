@@ -3,9 +3,20 @@ export const CATEGORIES = {
   MERCHANDISE: 'Merchandise',
   TOOLS: 'Tools',
   COMPONENTS: 'Components',
-  EROV_PRODUCT: 'EROV PRODUCT',
-  JSUMO_PRODUCT: 'JSUMO PRODUCT',
-  ZM_ROBO_PRODUCT: 'ZM ROBO PRODUCT'
+  EROV_PRODUCT: 'EROV_PRODUCT',
+  JSUMO_PRODUCT: 'JSUMO_PRODUCT',
+  ZM_ROBO_PRODUCT: 'ZM_ROBO_PRODUCT'
+};
+
+// Database mapping for constraint compatibility
+export const DATABASE_CATEGORY_MAP = {
+  'Electronics': 'Component',
+  'Merchandise': 'Product',
+  'Tools': 'Tool',
+  'Components': 'Component',
+  'EROV_PRODUCT': 'Component',
+  'JSUMO_PRODUCT': 'Product',
+  'ZM_ROBO_PRODUCT': 'Tool'
 };
 
 export const CATEGORY_OPTIONS = [
@@ -17,6 +28,17 @@ export const CATEGORY_OPTIONS = [
   { value: CATEGORIES.JSUMO_PRODUCT, label: 'JSUMO PRODUCT' },
   { value: CATEGORIES.ZM_ROBO_PRODUCT, label: 'ZM ROBO PRODUCT' }
 ];
+
+// Helper to get display name from database value
+export const getCategoryDisplayName = (category) => {
+  const categoryMap = {
+    'Component': 'Component',
+    'Product': 'Product', 
+    'Tool': 'Tool',
+    'Others': 'Others'
+  };
+  return categoryMap[category] || category;
+};
 
 export const getCategoryColor = (category) => {
   switch (category) {

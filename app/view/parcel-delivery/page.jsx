@@ -5,7 +5,7 @@ import React, { useState, useEffect } from "react";
 import AuthGuard from "../../components/AuthGuard";
 import TopNavbar from "../../components/TopNavbar";
 import Sidebar from "../../components/Sidebar";
-import { PackageOpen, Plus, Clock, Calendar, Package } from "lucide-react";
+import { PackageOpen, Plus, Clock, Calendar, Package, X } from "lucide-react";
 import "animate.css";
 import {
   fetchParcelOutItems,
@@ -20,20 +20,72 @@ export default function Page() {
 
   const [items, setItems] = useState([]);
   const [availableItems, setAvailableItems] = useState([]);
-  const [selectedItemId, setSelectedItemId] = useState("");
   const [date, setDate] = useState("");
-  const [quantity, setQuantity] = useState(1);
   const [timeHour, setTimeHour] = useState("1");
   const [timeMinute, setTimeMinute] = useState("00");
   const [timeAMPM, setTimeAMPM] = useState("AM");
-  const [shippingMode, setShippingMode] = useState("");
-  const [clientName, setClientName] = useState("");
-  const [price, setPrice] = useState("");
-  const [category, setCategory] = useState(CATEGORIES.ELECTRONICS);
   const [selectedFilter, setSelectedFilter] = useState("");
-  const computedTotalPrice = (Number(price) || 0) * (Number(quantity) || 0);
 
-  // Calculate unique items (count of distinct item names)
+  // Multi-product state
+  const [parcelRows, setParcelRows] = useState([
+    {
+      id: 1,
+      name: "",
+      quantity: 1,
+      price: "",
+      category: CATEGORIES.ELECTRONICS,
+      shippingMode: "",
+      clientName: "",
+    }
+  ]);
+
+  // Helper functions for multi-product management
+  const addParcelRow = () => {
+    const newId = Math.max(...parcelRows.map(row => row.id)) + 1;
+    setParcelRows([
+      ...parcelRows,
+      {
+        id: newId,
+        name: "",
+        quantity: 1,
+        price: "",
+        category: CATEGORIES.ELECTRONICS,
+        shippingMode: "",
+        clientName: "",
+      }
+    ]);
+  };
+
+  const removeParcelRow = (id) => {
+    if (parcelRows.length > 1) {
+      setParcelRows(parcelRows.filter(row => row.id !== id));
+    }
+  };
+
+  const updateParcelRow = (id, field, value) => {
+    setParcelRows(parcelRows.map(row => {
+      if (row.id === id) {
+        const updatedRow = { ...row, [field]: value };
+        
+        // Reset quantity to 1 when item changes
+        if (field === 'name') {
+          updatedRow.quantity = 1;
+        }
+        
+        return updatedRow;
+      }
+      return row;
+    }));
+  };
+
+  const calculateTotalPrice = () => {
+    return parcelRows.reduce((total, row) => {
+      const quantityToAdd = parseInt(row.quantity) || 0;
+      const computedTotalPrice = (parseFloat(row.price) || 0) * quantityToAdd;
+      return total + computedTotalPrice;
+    }, 0);
+  };
+
   const getUniqueItemCount = (itemsList) => {
     const uniqueNames = new Set(itemsList.map(item => item.name).filter(Boolean));
     return uniqueNames.size;
@@ -41,12 +93,10 @@ export default function Page() {
 
   const uniqueOutItemCount = getUniqueItemCount(items);
 
-  const selectedItem = availableItems.find(
-    (item) => item.name === selectedItemId,
-  );
-  const availableStock = selectedItem?.quantity || 0;
-  const maxQuantity = availableStock;
-  const canAddParcelOut = availableStock > 0;
+  // Helper function for conditional styling
+  const getClassName = (darkMode, darkClass, lightClass) => {
+    return darkMode ? darkClass : lightClass;
+  };
 
   const aggregateAvailableItems = (rows) => {
     const grouped = (rows || []).reduce((acc, row) => {
@@ -64,16 +114,16 @@ export default function Page() {
       .sort((a, b) => b.quantity - a.quantity);
   };
 
+  const loadItems = async () => {
+    const outItems = await fetchParcelOutItems();
+    setItems(outItems);
+    const inItems = await fetchParcelItems();
+    setAvailableItems(aggregateAvailableItems(inItems));
+  };
+
   useEffect(() => {
     const savedDarkMode = localStorage.getItem("darkMode");
     if (savedDarkMode !== null) setDarkMode(savedDarkMode === "true");
-
-    const loadItems = async () => {
-      const outItems = await fetchParcelOutItems();
-      setItems(outItems);
-      const inItems = await fetchParcelItems();
-      setAvailableItems(aggregateAvailableItems(inItems));
-    };
 
     const now = new Date();
     let hour = now.getHours();
@@ -102,42 +152,53 @@ export default function Page() {
 
   const handleAddItem = async (e) => {
     e.preventDefault();
-    if (!selectedItemId) return;
+    
+    // Validate all rows have required fields
+    const invalidRows = parcelRows.filter(row => !row.name || row.quantity <= 0);
+    if (invalidRows.length > 0) {
+      alert("Please fill in all required fields (Item Name and Quantity) for each row.");
+      return;
+    }
 
-    const result = await handleAddParcelOut({
-      item_name: selectedItemId,
-      date,
-      quantity: Number(quantity),
-      timeHour,
-      timeMinute,
-      timeAMPM,
-      shipping_mode: shippingMode,
-      client_name: clientName,
-      price: computedTotalPrice,
-      category: category,
-    });
+    // Add each row
+    for (const row of parcelRows) {
+      const quantityToAdd = parseInt(row.quantity);
+      const computedTotalPrice = (parseFloat(row.price) || 0) * quantityToAdd;
 
-    if (!result || !result.newItem) return;
+      const result = await handleAddParcelOut({
+        item_name: row.name,
+        date,
+        quantity: quantityToAdd,
+        timeHour,
+        timeMinute,
+        timeAMPM,
+        shipping_mode: row.shippingMode,
+        client_name: row.clientName,
+        price: computedTotalPrice,
+        category: row.category,
+      });
 
-    setItems(result.updatedOut || []);
-    setAvailableItems(aggregateAvailableItems(result.updatedIn || []));
+      if (!result || !result.newItem) {
+        alert(`Failed to add item: ${row.name}`);
+        return;
+      }
+    }
 
-    alert(
-      `✅ Successfully created Parcel Out!\n` +
-        `Item: ${selectedItemId}\n` +
-        `Quantity Out: ${quantity} units`,
-    );
+    // Reload items and reset form
+    await loadItems();
+    
+    // Reset form after successful submission
+    setParcelRows([{
+      id: 1,
+      name: "",
+      quantity: 1,
+      price: "",
+      category: CATEGORIES.ELECTRONICS,
+      shippingMode: "",
+      clientName: "",
+    }]);
 
-    setSelectedItemId("");
-    setDate("");
-    setQuantity(1);
-    setTimeHour("1");
-    setTimeMinute("00");
-    setTimeAMPM("AM");
-    setShippingMode("");
-    setClientName("");
-    setPrice("");
-    setCategory(CATEGORIES.OTHERS);
+    alert(`✅ Successfully created ${parcelRows.length} Parcel Out items!`);
   };
 
   const filteredItems = selectedFilter
@@ -150,30 +211,23 @@ export default function Page() {
   return (
     <AuthGuard darkMode={darkMode}>
       <div
-        className={`flex flex-col w-full h-screen overflow-hidden ${
-          darkMode ? "dark bg-[#0B0B0B] text-white" : "bg-[#F9FAFB] text-black"
+        className={`min-h-screen transition-colors duration-300 ${
+          darkMode ? "bg-[#111827] text-white" : "bg-[#F3F4F6] text-black"
         }`}
       >
         {/* Top Navbar */}
-        <div
-          className={`fixed top-0 left-0 right-0 z-50 backdrop-blur-xl border-b shadow-sm ${
-            darkMode
-              ? "bg-[#111827]/90 border-[#374151]"
-              : "bg-white/90 border-[#E5E7EB]"
-          }`}
-        >
-          <TopNavbar
-            sidebarOpen={sidebarOpen}
-            setSidebarOpen={setSidebarOpen}
-            darkMode={darkMode}
-            setDarkMode={setDarkMode}
-          />
-        </div>
+        <TopNavbar
+          sidebarOpen={sidebarOpen}
+          setSidebarOpen={setSidebarOpen}
+          darkMode={darkMode}
+          setDarkMode={setDarkMode}
+        />
 
         {/* Sidebar */}
         <Sidebar
           sidebarOpen={sidebarOpen}
           setSidebarOpen={setSidebarOpen}
+          activeTab="parcel-delivery"
           darkMode={darkMode}
         />
 
@@ -209,7 +263,7 @@ export default function Page() {
                 ></div>
               </div>
               <p
-                className={`text-center text-sm ${
+                className={`text-sm ${
                   darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"
                 }`}
               >
@@ -217,300 +271,326 @@ export default function Page() {
               </p>
             </div>
 
-            {/* Add Item Form */}
+            {/* Form */}
             <form
               onSubmit={handleAddItem}
-              className={`p-6 rounded-xl shadow-lg mb-8 border animate__animated animate__fadeInUp ${
-                darkMode
-                  ? "bg-[#1F2937] border-[#374151]"
-                  : "bg-white border-[#E5E7EB]"
-              }`}
+              className={getClassName(
+                darkMode,
+                "p-6 rounded-xl shadow-lg mb-8 border transition animate__animated animate__fadeInUp animate__faster bg-[#1F2937] border-[#374151] text-white",
+                "p-6 rounded-xl shadow-lg mb-8 border transition animate__animated animate__fadeInUp animate__faster bg-white border-[#E5E7EB] text-[#111827]"
+              )}
             >
-              <div className="flex items-center gap-2 mb-5">
-                <Plus
-                  className={`w-5 h-5 ${
-                    darkMode ? "text-[#F97316]" : "text-[#EA580C]"
-                  }`}
-                />
-                <h2
-                  className={`text-lg font-semibold ${
-                    darkMode ? "text-white" : "text-[#111827]"
-                  }`}
-                >
-                  Out Item
-                </h2>
+              <div className="flex items-center gap-2 mb-6">
+                <div className="flex items-center gap-2">
+                  <Plus
+                    className={getClassName(
+                      darkMode,
+                      "w-5 h-5 text-[#3B82F6]",
+                      "w-5 h-5 text-[#1E3A8A]"
+                    )}
+                  />
+                  <h2 className="text-lg font-semibold">Items to Out</h2>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-                {/* Item Name */}
+              {/* Date and Time (shared for all items) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4 mb-6">
                 <div className="flex flex-col">
-                  <label
-                    className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
-                    <Package className="w-4 h-4" /> Item Name
-                  </label>
-                  <select
-                    value={selectedItemId}
-                    onChange={(e) => {
-                      setSelectedItemId(e.target.value);
-                      setQuantity(1);
-                    }}
-                    className={`border rounded-lg px-3 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#F97316] focus:border-[#F97316] bg-[#111827] text-white"
-                        : "border-[#D1D5DB] focus:ring-[#EA580C] focus:border-[#EA580C] bg-white text-black"
-                    }`}
-                    required
-                  >
-                    <option value="" disabled>
-                      Please select
-                    </option>
-                    {availableItems.map((item) => (
-                      <option key={item.id} value={item.name}>
-                        {item.name} (Stock: {item.quantity})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Date */}
-                <div className="flex flex-col">
-                  <label
-                    className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
-                    <Calendar className="w-4 h-4" /> Date
+                  <label className={getClassName(
+                    darkMode,
+                    "text-sm font-medium mb-2 text-gray-300",
+                    "text-sm font-medium mb-2 text-gray-700"
+                  )}>
+                    <Calendar className="w-4 h-4 inline mr-1" /> Date
                   </label>
                   <input
                     type="date"
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
-                    className={`border rounded-lg px-3 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#F97316] focus:border-[#F97316] bg-[#111827] text-white"
-                        : "border-[#D1D5DB] focus:ring-[#EA580C] focus:border-[#EA580C] bg-white text-black"
-                    }`}
+                    className={getClassName(
+                      darkMode,
+                      "border rounded-lg px-3 py-2.5 w-full focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                      "border rounded-lg px-3 py-2.5 w-full focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                    )}
                     required
                   />
                 </div>
 
-                {/* Quantity */}
                 <div className="flex flex-col">
-                  <label
-                    className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
-                    <Package className="w-4 h-4" /> Quantity
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max={maxQuantity || 1}
-                    value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
-                    disabled={!selectedItemId || !canAddParcelOut}
-                    className={`border rounded-lg px-3 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#F97316] focus:border-[#F97316] bg-[#111827] text-white disabled:bg-[#0B0B0B] disabled:opacity-50 disabled:cursor-not-allowed"
-                        : "border-[#D1D5DB] focus:ring-[#EA580C] focus:border-[#EA580C] bg-white text-black disabled:bg-[#F3F4F6] disabled:opacity-50 disabled:cursor-not-allowed"
-                    }`}
-                    required
-                  />
-                  {selectedItemId && !canAddParcelOut && (
-                    <p className="text-xs text-[#EF4444] mt-1">
-                      ⚠️ No stock available
-                    </p>
-                  )}
-                  {selectedItemId && canAddParcelOut && (
-                    <p
-                      className={`text-xs mt-1 ${darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"}`}
-                    >
-                      Available: {availableStock} units (can take out 1-
-                      {maxQuantity})
-                    </p>
-                  )}
-                  {selectedItemId && (
-                    <p
-                      className={`text-xs mt-1 ${darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"}`}
-                    >
-                      Unique Items Available: {availableItems.length} different types
-                    </p>
-                  )}
-                </div>
-
-                {/* Time Out */}
-                <div className="flex flex-col">
-                  <label
-                    className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
-                    <Clock className="w-4 h-4" /> Time Out
+                  <label className={getClassName(
+                    darkMode,
+                    "text-sm font-medium mb-2 text-gray-300",
+                    "text-sm font-medium mb-2 text-gray-700"
+                  )}>
+                    <Clock className="w-4 h-4 inline mr-1" /> Time Out
                   </label>
                   <div className="flex gap-2">
                     <select
                       value={timeHour}
                       onChange={(e) => setTimeHour(e.target.value)}
-                      className={`border rounded-lg px-2 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
-                        darkMode
-                          ? "border-[#374151] focus:ring-[#F97316] focus:border-[#F97316] bg-[#111827] text-white"
-                          : "border-[#D1D5DB] focus:ring-[#EA580C] focus:border-[#EA580C] bg-white text-black"
-                      }`}
+                      className={getClassName(
+                        darkMode,
+                        "border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                        "border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                      )}
                     >
-                      {Array.from({ length: 12 }, (_, i) => (
-                        <option key={i} value={i + 1}>
-                          {i + 1}
-                        </option>
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map((hour) => (
+                        <option key={hour} value={hour}>{hour}</option>
                       ))}
                     </select>
+                    <span className="self-center">:</span>
                     <select
                       value={timeMinute}
                       onChange={(e) => setTimeMinute(e.target.value)}
-                      className={`border rounded-lg px-2 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
-                        darkMode
-                          ? "border-[#374151] focus:ring-[#F97316] focus:border-[#F97316] bg-[#111827] text-white"
-                          : "border-[#D1D5DB] focus:ring-[#EA580C] focus:border-[#EA580C] bg-white text-black"
-                      }`}
+                      className={getClassName(
+                        darkMode,
+                        "border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                        "border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                      )}
                     >
-                      {Array.from({ length: 60 }, (_, i) => {
-                        const val = i < 10 ? `0${i}` : `${i}`;
-                        return (
-                          <option key={i} value={val}>
-                            {val}
-                          </option>
-                        );
-                      })}
+                      <option value="00">00</option>
+                      <option value="15">15</option>
+                      <option value="30">30</option>
+                      <option value="45">45</option>
                     </select>
                     <select
                       value={timeAMPM}
                       onChange={(e) => setTimeAMPM(e.target.value)}
-                      className={`border rounded-lg px-2 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
-                        darkMode
-                          ? "border-[#374151] focus:ring-[#F97316] focus:border-[#F97316] bg-[#111827] text-white"
-                          : "border-[#D1D5DB] focus:ring-[#EA580C] focus:border-[#EA580C] bg-white text-black"
-                      }`}
+                      className={getClassName(
+                        darkMode,
+                        "border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                        "border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                      )}
                     >
-                      <option>AM</option>
-                      <option>PM</option>
+                      <option value="AM">AM</option>
+                      <option value="PM">PM</option>
                     </select>
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                {/* Category */}
-                <div className="flex flex-col">
-                  <label
-                    className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
+              {/* Multi-product rows */}
+              <div className="space-y-4 mb-6">
+                {parcelRows.map((row, index) => (
+                  <div
+                    key={row.id}
+                    className={getClassName(
+                      darkMode,
+                      "p-4 rounded-lg border bg-[#111827] border-[#374151]",
+                      "p-4 rounded-lg border bg-gray-50 border-gray-200"
+                    )}
                   >
-                    <Package className="w-4 h-4" /> Category
-                  </label>
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className={`border rounded-lg px-3 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#F97316] focus:border-[#F97316] bg-[#111827] text-white"
-                        : "border-[#D1D5DB] focus:ring-[#EA580C] focus:border-[#EA580C] bg-white text-black"
-                    }`}
-                    required
-                  >
-                    {CATEGORY_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex flex-col">
-                  <label
-                    className={`text-sm font-medium mb-2 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
-                    Shipping Mode
-                  </label>
-                  <input
-                    type="text"
-                    value={shippingMode}
-                    onChange={(e) => setShippingMode(e.target.value)}
-                    placeholder="Shopee (J&T)"
-                    className={`border rounded-lg px-3 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#F97316] focus:border-[#F97316] bg-[#111827] text-white"
-                        : "border-[#D1D5DB] focus:ring-[#EA580C] focus:border-[#EA580C] bg-white text-black"
-                    }`}
-                  />
-                  <p
-                    className={`text-xs mt-1 ${
-                      darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"
-                    }`}
-                  >
-                    Display Price: ₱{computedTotalPrice.toLocaleString()}
-                  </p>
-                </div>
-                <div className="flex flex-col">
-                  <label
-                    className={`text-sm font-medium mb-2 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
-                    Client Name
-                  </label>
-                  <input
-                    type="text"
-                    value={clientName}
-                    onChange={(e) => setClientName(e.target.value)}
-                    placeholder="Client name"
-                    className={`border rounded-lg px-3 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#F97316] focus:border-[#F97316] bg-[#111827] text-white"
-                        : "border-[#D1D5DB] focus:ring-[#EA580C] focus:border-[#EA580C] bg-white text-black"
-                    }`}
-                  />
-                </div>
-                <div className="flex flex-col">
-                  <label
-                    className={`text-sm font-medium mb-2 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
-                    Price
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={price}
-                    onChange={(e) => setPrice(e.target.value)}
-                    placeholder="0.00"
-                    className={`border rounded-lg px-3 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#F97316] focus:border-[#F97316] bg-[#111827] text-white"
-                        : "border-[#D1D5DB] focus:ring-[#EA580C] focus:border-[#EA580C] bg-white text-black"
-                    }`}
-                  />
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className={getClassName(
+                        darkMode,
+                        "text-sm font-medium text-gray-300",
+                        "text-sm font-medium text-gray-700"
+                      )}>
+                        Item {index + 1}
+                      </h4>
+                      {parcelRows.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeParcelRow(row.id)}
+                          className={getClassName(
+                            darkMode,
+                            "p-1 rounded hover:bg-red-900/20 text-red-400 transition-colors",
+                            "p-1 rounded hover:bg-red-100 text-red-600 transition-colors"
+                          )}
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {/* Item Name */}
+                      <div className="flex flex-col">
+                        <label className={getClassName(
+                          darkMode,
+                          "text-xs font-medium mb-1 text-gray-400",
+                          "text-xs font-medium mb-1 text-gray-600"
+                        )}>
+                          Item Name
+                        </label>
+                        <select
+                          value={row.name}
+                          onChange={(e) => updateParcelRow(row.id, 'name', e.target.value)}
+                          className={getClassName(
+                            darkMode,
+                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                          )}
+                          required
+                        >
+                          <option value="" disabled>Please select</option>
+                          {availableItems.map((item) => (
+                            <option key={item.id} value={item.name}>
+                              {item.name} (Stock: {item.quantity})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Quantity */}
+                      <div className="flex flex-col">
+                        <label className={getClassName(
+                          darkMode,
+                          "text-xs font-medium mb-1 text-gray-400",
+                          "text-xs font-medium mb-1 text-gray-600"
+                        )}>
+                          Quantity
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={row.quantity}
+                          onChange={(e) => updateParcelRow(row.id, 'quantity', e.target.value)}
+                          className={getClassName(
+                            darkMode,
+                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                          )}
+                          required
+                        />
+                      </div>
+
+                      {/* Category */}
+                      <div className="flex flex-col">
+                        <label className={getClassName(
+                          darkMode,
+                          "text-xs font-medium mb-1 text-gray-400",
+                          "text-xs font-medium mb-1 text-gray-600"
+                        )}>
+                          Category
+                        </label>
+                        <select
+                          value={row.category}
+                          onChange={(e) => updateParcelRow(row.id, 'category', e.target.value)}
+                          className={getClassName(
+                            darkMode,
+                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                          )}
+                        >
+                          {CATEGORY_OPTIONS.map((cat) => (
+                            <option key={cat.value} value={cat.value}>
+                              {cat.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Price */}
+                      <div className="flex flex-col">
+                        <label className={getClassName(
+                          darkMode,
+                          "text-xs font-medium mb-1 text-gray-400",
+                          "text-xs font-medium mb-1 text-gray-600"
+                        )}>
+                          Price per Unit
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={row.price}
+                          onChange={(e) => updateParcelRow(row.id, 'price', e.target.value)}
+                          className={getClassName(
+                            darkMode,
+                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                          )}
+                        />
+                      </div>
+
+                      {/* Shipping Mode */}
+                      <div className="flex flex-col">
+                        <label className={getClassName(
+                          darkMode,
+                          "text-xs font-medium mb-1 text-gray-400",
+                          "text-xs font-medium mb-1 text-gray-600"
+                        )}>
+                          Shipping Mode
+                        </label>
+                        <input
+                          type="text"
+                          value={row.shippingMode}
+                          onChange={(e) => updateParcelRow(row.id, 'shippingMode', e.target.value)}
+                          className={getClassName(
+                            darkMode,
+                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                          )}
+                        />
+                      </div>
+
+                      {/* Client Name */}
+                      <div className="flex flex-col">
+                        <label className={getClassName(
+                          darkMode,
+                          "text-xs font-medium mb-1 text-gray-400",
+                          "text-xs font-medium mb-1 text-gray-600"
+                        )}>
+                          Client Name
+                        </label>
+                        <input
+                          type="text"
+                          value={row.clientName}
+                          onChange={(e) => updateParcelRow(row.id, 'clientName', e.target.value)}
+                          className={getClassName(
+                            darkMode,
+                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                          )}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Total Price Display */}
+              <div className="mb-6 p-4 rounded-lg border">
+                <div className="flex justify-between items-center">
+                  <span className={getClassName(
+                    darkMode,
+                    "text-lg font-semibold text-white",
+                    "text-lg font-semibold text-gray-900"
+                  )}>
+                    Total Price:
+                  </span>
+                  <span className={getClassName(
+                    darkMode,
+                    "text-xl font-bold text-green-400",
+                    "text-xl font-bold text-green-600"
+                  )}>
+                    ₱{calculateTotalPrice().toFixed(2)}
+                  </span>
                 </div>
               </div>
 
-              {/* Submit */}
-              <div className="flex justify-end mt-6">
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={addParcelRow}
+                  className={getClassName(
+                    darkMode,
+                    "inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors",
+                    "inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-black px-4 py-2 rounded-lg font-medium transition-colors"
+                  )}
+                >
+                  <Plus className="w-4 h-4" /> Add Item Row
+                </button>
                 <button
                   type="submit"
-                  disabled={!canAddParcelOut}
-                  className={`bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white px-6 py-2.5 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg ${
-                    canAddParcelOut
-                      ? "animate__animated animate__pulse animate__infinite animate__slow"
-                      : "opacity-50 cursor-not-allowed"
-                  }`}
+                  className={getClassName(
+                    darkMode,
+                    "inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-medium transition-colors",
+                    "inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-black px-6 py-2.5 rounded-lg font-medium transition-colors"
+                  )}
                 >
-                  <Plus className="w-5 h-5" /> Out Item
+                  <Plus className="w-5 h-5" /> Out {parcelRows.length} {parcelRows.length === 1 ? 'Item' : 'Items'}
                 </button>
               </div>
             </form>

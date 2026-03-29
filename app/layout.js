@@ -1,7 +1,7 @@
 // app/layout.jsx
 import "./globals.css";
 
-// ✅ Force the entire app to be dynamic
+// ✅ Force entire app to be dynamic
 export const dynamic = "force-dynamic";
 
 export const metadata = {

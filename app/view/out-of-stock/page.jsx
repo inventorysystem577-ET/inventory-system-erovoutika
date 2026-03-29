@@ -77,35 +77,44 @@ export default function Page() {
   const parcelTableRef = useRef(null);
   const productTableRef = useRef(null);
 
+  // Helper to safely get quantity value
+  const safeQuantity = (item) => {
+    const qty = Number(item?.quantity);
+    return isNaN(qty) ? 0 : qty;
+  };
+
   // Helper to get stock status
   const getStockStatus = (quantity) => {
-    if (quantity === 0) return "out";
-    if (quantity <= 5) return "critical";
-    if (quantity < 10) return "low";
+    const qty = safeQuantity({ quantity });
+    if (qty === 0) return "out";
+    if (qty <= 5) return "critical";
+    if (qty < 10) return "low";
     return "available";
   };
 
   // Helper to get status label
   const getStatusLabel = (quantity) => {
-    if (quantity === 0) return "Out of Stock";
-    if (quantity <= 5) return "Critical Level";
-    if (quantity < 10) return "Low Stock";
+    const qty = safeQuantity({ quantity });
+    if (qty === 0) return "Out of Stock";
+    if (qty <= 5) return "Critical Level";
+    if (qty < 10) return "Low Stock";
     return "Available";
   };
 
   // Helper to get status color
   const getStatusColor = (quantity, darkMode) => {
-    if (quantity === 0) {
+    const qty = safeQuantity({ quantity });
+    if (qty === 0) {
       return darkMode
         ? "bg-[#EF4444]/20 text-[#EF4444] border border-[#EF4444]/30"
         : "bg-[#FEE2E2] text-[#DC2626] border border-[#FECACA]";
     }
-    if (quantity <= 5) {
+    if (qty <= 5) {
       return darkMode
         ? "bg-[#F97316]/20 text-[#F97316] border border-[#F97316]/30"
         : "bg-[#FFEDD5] text-[#EA580C] border border-[#FED7AA]";
     }
-    if (quantity < 10) {
+    if (qty < 10) {
       return darkMode
         ? "bg-[#FACC15]/20 text-[#FACC15] border border-[#FACC15]/30"
         : "bg-[#FEF9C3] text-[#EAB308] border border-[#FEF08A]";
@@ -117,24 +126,37 @@ export default function Page() {
 
   // Helper to get status icon
   const getStatusIcon = (quantity) => {
-    if (quantity === 0) return <XCircle className="w-4 h-4" />;
-    if (quantity <= 5)
+    const qty = safeQuantity({ quantity });
+    if (qty === 0) return <XCircle className="w-4 h-4" />;
+    if (qty <= 5)
       return <AlertTriangle className="w-4 h-4 animate-pulse" />;
-    if (quantity < 10) return <TrendingDown className="w-4 h-4" />;
+    if (qty < 10) return <TrendingDown className="w-4 h-4" />;
     return <Box className="w-4 h-4" />;
   };
 
   // Helper to get indicator dot color
   const getIndicatorColor = (quantity) => {
-    if (quantity === 0) return "bg-[#EF4444]";
-    if (quantity <= 5) return "bg-[#F97316]";
-    if (quantity < 10) return "bg-[#FACC15]";
+    const qty = safeQuantity({ quantity });
+    if (qty === 0) return "bg-[#EF4444]";
+    if (qty <= 5) return "bg-[#F97316]";
+    if (qty < 10) return "bg-[#FACC15]";
     return "bg-[#22C55E]";
   };
 
   const loadItems = async () => {
     const parcelData = await fetchParcelItems();
     const productData = await fetchProductInController();
+
+    // Debug: Log any NaN quantities
+    const parcelNaN = parcelData?.filter(item => isNaN(Number(item.quantity)));
+    const productNaN = productData?.filter(item => isNaN(Number(item.quantity)));
+    
+    if (parcelNaN?.length > 0) {
+      console.log('Parcel items with NaN quantity:', parcelNaN);
+    }
+    if (productNaN?.length > 0) {
+      console.log('Product items with NaN quantity:', productNaN);
+    }
 
     setParcelItems(parcelData || []);
     setProductItems(productData || []);
@@ -220,24 +242,18 @@ export default function Page() {
 
   // Count parcel items by status
   const parcelStatusCounts = {
-    out: parcelItems.filter((item) => item.quantity === 0).length,
-    critical: parcelItems.filter(
-      (item) => item.quantity > 0 && item.quantity <= 5,
-    ).length,
-    low: parcelItems.filter((item) => item.quantity > 5 && item.quantity < 10)
-      .length,
-    available: parcelItems.filter((item) => item.quantity >= 10).length,
+    out: parcelItems.filter((item) => safeQuantity(item) === 0).length,
+    critical: parcelItems.filter((item) => safeQuantity(item) > 0 && safeQuantity(item) <= 5).length,
+    low: parcelItems.filter((item) => safeQuantity(item) > 5 && safeQuantity(item) < 10).length,
+    available: parcelItems.filter((item) => safeQuantity(item) >= 10).length,
   };
 
   // Count product items by status
   const productStatusCounts = {
-    out: productItems.filter((item) => item.quantity === 0).length,
-    critical: productItems.filter(
-      (item) => item.quantity > 0 && item.quantity <= 5,
-    ).length,
-    low: productItems.filter((item) => item.quantity > 5 && item.quantity < 10)
-      .length,
-    available: productItems.filter((item) => item.quantity >= 10).length,
+    out: productItems.filter((item) => safeQuantity(item) === 0).length,
+    critical: productItems.filter((item) => safeQuantity(item) > 0 && safeQuantity(item) <= 5).length,
+    low: productItems.filter((item) => safeQuantity(item) > 5 && safeQuantity(item) < 10).length,
+    available: productItems.filter((item) => safeQuantity(item) >= 10).length,
   };
 
   const exportToPDF = (parcelData = [], productData = []) => {
@@ -260,7 +276,7 @@ export default function Page() {
     ];
     const parcelTableRows = parcelData.map((item) => [
       item.name,
-      `${item.quantity} units`,
+      `${safeQuantity(item)} units`,
       getStatusLabel(item.quantity),
       item.date,
     ]);
@@ -287,7 +303,7 @@ export default function Page() {
     ];
     const productTableRows = productData.map((item) => [
       item.product_name,
-      `${item.quantity} units`,
+      `${safeQuantity(item)} units`,
       getStatusLabel(item.quantity),
       item.date,
     ]);
@@ -667,7 +683,7 @@ export default function Page() {
                     Normal Stock
                   </p>
                   <p className="text-2xl font-bold">
-                    {parcelStatusCounts.normal + productStatusCounts.normal}
+                    {parcelStatusCounts.available + productStatusCounts.available}
                   </p>
                 </div>
               </div>
@@ -867,7 +883,7 @@ export default function Page() {
                               </span>
                             </td>
                             <td className="px-4 py-3 text-sm">
-                              {item.quantity} units
+                              {safeQuantity(item)} units
                             </td>
                             <td className="px-4 py-3 text-sm">
                               <span
@@ -882,7 +898,7 @@ export default function Page() {
                             </td>
                             <td className="px-4 py-3 text-sm">{item.date}</td>
                             <td className="px-4 py-3 text-sm">
-                              {item.quantity === 0 ? (
+                              {safeQuantity(item) === 0 ? (
                                 <Link
                                   href={`/view/parcel-shipped?item=${encodeURIComponent(item.name)}`}
                                 >
