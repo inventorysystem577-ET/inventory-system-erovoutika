@@ -79,7 +79,7 @@ export default function page() {
   const [productInCount, setProductInCount] = useState(0);
   const [productOutCount, setProductOutCount] = useState(0);
 
-  // Component (parcel) stock status counts
+  // Component (parcel) inventory status counts
   const [statusCounts, setStatusCounts] = useState({
     out: 0,
     critical: 0,
@@ -87,7 +87,7 @@ export default function page() {
     available: 0,
   });
 
-  // Product stock status counts
+  // Product inventory status counts
   const [productStatusCounts, setProductStatusCounts] = useState({
     out: 0,
     critical: 0,
@@ -338,11 +338,11 @@ export default function page() {
               )}
             </div>
 
-            {/* ============= COMPONENT STOCK STATUS ============= */}
+            {/* ============= COMPONENT INVENTORY STATUS ============= */}
             <div className="mb-8">
               <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
                 <Package className="w-5 h-5 text-[#1e40af]" />
-                Component Stock Status
+                Component Inventory Status
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <DashboardStatusCard
@@ -404,11 +404,11 @@ export default function page() {
               </div>
             </div>
 
-            {/* ============= PRODUCT STOCK STATUS ============= */}
+            {/* ============= PRODUCT INVENTORY STATUS ============= */}
             <div className="mb-8">
               <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
                 <Boxes className="w-5 h-5 text-[#7c3aed]" />
-                Product Stock Status
+                Product Inventory Status
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <DashboardStatusCard

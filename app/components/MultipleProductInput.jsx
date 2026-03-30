@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Plus, Trash2, Package } from "lucide-react";
-import { CATEGORIES, CATEGORY_OPTIONS } from "../utils/categoryUtils";
+import { CATEGORIES, PRODUCT_CATEGORY_OPTIONS } from "../utils/categoryUtils";
 
 const MultipleProductInput = ({ 
   products, 
@@ -162,7 +162,7 @@ const MultipleProductInput = ({
                 onChange={(e) => updateProductField(index, "category", e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               >
-                {CATEGORY_OPTIONS.map((option) => (
+                {PRODUCT_CATEGORY_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>

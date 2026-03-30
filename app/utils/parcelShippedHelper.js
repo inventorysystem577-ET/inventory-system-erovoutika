@@ -1,6 +1,6 @@
 // utils/parcelHelper.js
 import axios from "axios";
-import { DATABASE_CATEGORY_MAP } from "./categoryUtils.js";
+import { CATEGORIES, getCategoryDisplayName } from "./categoryUtils.js";
 
 // Fetch all parcel-in items
 export const fetchParcelItems = async () => {
@@ -56,8 +56,8 @@ export const addParcelItem = async ({
   category,
 }) => {
   try {
-    // Map category to database-compatible value
-    const dbCategory = DATABASE_CATEGORY_MAP[category] || category;
+    // Use category directly since we're now using the correct format
+    const dbCategory = category;
     
     const res = await axios.post("/api/parcelShipped", {
       item_name,
