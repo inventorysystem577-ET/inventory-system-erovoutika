@@ -94,6 +94,9 @@ export default function ProductInPage() {
   const [showMissingComponentsModal, setShowMissingComponentsModal] =
     useState(false);
   const [isAddingMissingStock, setIsAddingMissingStock] = useState(false);
+  const [pendingProductInRequest, setPendingProductInRequest] = useState(null);
+  const [isRetryingPendingProductIn, setIsRetryingPendingProductIn] =
+    useState(false);
   const [showComponentStockModal, setShowComponentStockModal] = useState(false);
   const [availableComponents, setAvailableComponents] = useState([]);
   const [missingComponentsForSelected, setMissingComponentsForSelected] =
@@ -438,6 +441,13 @@ export default function ProductInPage() {
     if (!result?.success) {
       if (result?.missingComponents?.length > 0) {
         setMissing(result.missingComponents);
+        setPendingProductInRequest({
+          productName: alternativeRequest.product_name,
+          quantityToAdd: alternativeRequest.quantity,
+          dateValue: alternativeRequest.date,
+          timeInValue: alternativeRequest.time_in,
+          components: alternativeRequest.components,
+        });
         setShowMissingComponentsModal(true);
         setErrorBar("");
         return;
@@ -457,6 +467,7 @@ export default function ProductInPage() {
         : "";
     setSuccessBar(`Product IN added using alternative materials.${altText}`);
     setAlternativeRequest(null);
+    setPendingProductInRequest(null);
     await loadItems();
     await loadStockInItems();
 
@@ -507,6 +518,20 @@ export default function ProductInPage() {
       );
     } finally {
       setIsAddingMissingStock(false);
+    }
+  };
+
+  const retryPendingProductInSubmission = async () => {
+    if (!pendingProductInRequest) return;
+
+    setIsRetryingPendingProductIn(true);
+    setErrorBar("");
+    setSuccessBar("");
+
+    try {
+      await submitProductIn(pendingProductInRequest);
+    } finally {
+      setIsRetryingPendingProductIn(false);
     }
   };
 
@@ -616,6 +641,13 @@ export default function ProductInPage() {
 
       if (result?.missingComponents?.length > 0) {
         setMissing(result.missingComponents);
+        setPendingProductInRequest({
+          productName,
+          quantityToAdd,
+          dateValue,
+          timeInValue,
+          components,
+        });
         setShowMissingComponentsModal(true);
         setErrorBar("");
         return;
@@ -637,6 +669,8 @@ export default function ProductInPage() {
     setSuccessBar(
       `Product IN added and components deducted from Stock In.${altText}`,
     );
+    setPendingProductInRequest(null);
+    setShowMissingComponentsModal(false);
 
     await loadItems();
     await loadStockInItems();
@@ -1571,6 +1605,9 @@ export default function ProductInPage() {
         darkMode={darkMode}
         onAddToStockIn={handleAddMissingToStockIn}
         isAdding={isAddingMissingStock}
+        onRetryProductIn={retryPendingProductInSubmission}
+        hasPendingProductIn={Boolean(pendingProductInRequest)}
+        isRetryingProductIn={isRetryingPendingProductIn}
       />
 
       {showCustomComponentsModal && (

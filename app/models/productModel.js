@@ -5,6 +5,18 @@ const normalizeName = (value = "") =>
 
 const toNumber = (value) => Number(value || 0);
 
+const isMissingColumnError = (error, columnName) => {
+  if (!error || !columnName) return false;
+  const code = error.code || "";
+  const raw = `${error.message || ""} ${error.details || ""} ${error.hint || ""}`.toLowerCase();
+  const column = columnName.toLowerCase();
+
+  return (
+    (code === "PGRST204" || code === "42703" || raw.includes("schema cache")) &&
+    raw.includes(column)
+  );
+};
+
 const formatSupabaseError = (
   error,
   fallback = "Database operation failed.",
@@ -22,7 +34,10 @@ const formatSupabaseError = (
     (raw.includes("description") &&
       (raw.includes("schema cache") || raw.includes("column")))
   ) {
-    return "Missing 'description' column in DB. Run the SQL migration for product_in and products_out.";
+    if (raw.includes("category")) {
+      return "Missing 'category' column in DB table. Product insert failed.";
+    }
+    return "Missing 'description' column in DB table. Product insert failed.";
   }
 
   return [code, message, details, hint].filter(Boolean).join(" | ") || fallback;
@@ -327,9 +342,10 @@ export const reserveComponentsFromStock = async ({
   }));
 
   if (logs.length > 0) {
-    const { error: parcelOutError } = await supabase
+    const { data: insertedLogs, error: parcelOutError } = await supabase
       .from("parcel_out")
-      .insert(logs);
+      .insert(logs)
+      .select("id");
     if (parcelOutError) {
       console.error("Supabase insert error:", parcelOutError);
       return {
@@ -340,6 +356,16 @@ export const reserveComponentsFromStock = async ({
         usedAlternatives,
       };
     }
+
+    return {
+      success: true,
+      missingComponents: [],
+      alternativeOptions: [],
+      usedAlternatives,
+      stockDeductions: logs,
+      rowDeductions: stockDeductions,
+      parcelOutLogIds: (insertedLogs || []).map((row) => row.id).filter(Boolean),
+    };
   }
 
   return {
@@ -348,6 +374,85 @@ export const reserveComponentsFromStock = async ({
     alternativeOptions: [],
     usedAlternatives,
     stockDeductions: logs,
+    rowDeductions: stockDeductions,
+    parcelOutLogIds: [],
+  };
+};
+
+export const rollbackReservedComponents = async (reservation = {}) => {
+  const rowDeductions = Array.isArray(reservation?.rowDeductions)
+    ? reservation.rowDeductions
+    : [];
+  const parcelOutLogIds = Array.isArray(reservation?.parcelOutLogIds)
+    ? reservation.parcelOutLogIds.filter(Boolean)
+    : [];
+
+  if (rowDeductions.length === 0 && parcelOutLogIds.length === 0) {
+    return { success: true };
+  }
+
+  const errors = [];
+
+  if (rowDeductions.length > 0) {
+    const restoreByRowId = rowDeductions.reduce((map, item) => {
+      if (!item?.rowId || toNumber(item?.consumed) <= 0) return map;
+      const current = map.get(item.rowId) || 0;
+      map.set(item.rowId, current + toNumber(item.consumed));
+      return map;
+    }, new Map());
+
+    const rowIds = Array.from(restoreByRowId.keys());
+
+    if (rowIds.length > 0) {
+      const { data: currentRows, error: fetchError } = await supabase
+        .from("parcel_in")
+        .select("id, quantity")
+        .in("id", rowIds);
+
+      if (fetchError) {
+        errors.push(`Failed to fetch rows for rollback: ${fetchError.message}`);
+      } else {
+        const currentById = new Map(
+          (currentRows || []).map((row) => [row.id, toNumber(row.quantity)]),
+        );
+
+        const restoreUpdates = rowIds.map((rowId) => {
+          const currentQty = currentById.get(rowId);
+          if (currentQty === undefined) return null;
+          const addBack = toNumber(restoreByRowId.get(rowId));
+          return supabase
+            .from("parcel_in")
+            .update({ quantity: currentQty + addBack })
+            .eq("id", rowId);
+        });
+
+        const validUpdates = restoreUpdates.filter(Boolean);
+        const updateResults = await Promise.all(validUpdates);
+        const failedUpdate = updateResults.find((result) => result?.error);
+        if (failedUpdate?.error) {
+          errors.push(`Failed to rollback component quantities: ${failedUpdate.error.message}`);
+        }
+      }
+    }
+  }
+
+  if (parcelOutLogIds.length > 0) {
+    const { error: deleteError } = await supabase
+      .from("parcel_out")
+      .delete()
+      .in("id", parcelOutLogIds);
+
+    if (deleteError) {
+      errors.push(`Failed to rollback stock-out logs: ${deleteError.message}`);
+    }
+  }
+
+  return {
+    success: errors.length === 0,
+    message:
+      errors.length === 0
+        ? "Rollback completed"
+        : `Rollback completed with issues: ${errors.join(" | ")}`,
   };
 };
 
@@ -356,7 +461,7 @@ export const reserveComponentsFromStock = async ({
 ================================*/
 
 export const upsertProductIn = async (data) => {
-  const payload = {
+  let payload = {
     product_name: data.product_name,
     quantity: Number(data.quantity ?? 0),
     date: data.date || new Date().toISOString().split("T")[0],
@@ -376,22 +481,41 @@ export const upsertProductIn = async (data) => {
         : Number(data.price),
   };
 
-  const { data: insertedData, error: insertError } = await supabase
-    .from("product_in")
-    .insert([payload])
-    .select();
+  let lastError = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const { data: insertedData, error: insertError } = await supabase
+      .from("product_in")
+      .insert([payload])
+      .select();
 
-  if (insertError) {
-    console.error("upsertProductIn error:", JSON.stringify(insertError));
-    return {
-      __error: formatSupabaseError(
-        insertError,
-        "Error adding/updating product",
-      ),
-    };
+    if (!insertError) {
+      return insertedData?.[0] || null;
+    }
+
+    lastError = insertError;
+
+    if (isMissingColumnError(insertError, "category") && "category" in payload) {
+      const { category, ...nextPayload } = payload;
+      payload = nextPayload;
+      continue;
+    }
+
+    if (
+      isMissingColumnError(insertError, "description") &&
+      "description" in payload
+    ) {
+      const { description, ...nextPayload } = payload;
+      payload = nextPayload;
+      continue;
+    }
+
+    break;
   }
 
-  return insertedData[0];
+  console.error("upsertProductIn error:", JSON.stringify(lastError));
+  return {
+    __error: formatSupabaseError(lastError, "Error adding/updating product"),
+  };
 };
 
 export const getProductIn = async () => {
