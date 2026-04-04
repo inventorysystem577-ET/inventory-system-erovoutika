@@ -2,6 +2,14 @@ import React, { useState } from "react";
 import { Plus, Trash2, Package } from "lucide-react";
 import { CATEGORIES, CATEGORY_OPTIONS } from "../utils/categoryUtils";
 
+const getToday = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = `${now.getMonth() + 1}`.padStart(2, "0");
+  const day = `${now.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 const MultipleProductInput = ({ 
   products, 
   setProducts, 
@@ -11,14 +19,24 @@ const MultipleProductInput = ({
   computeComponentAvailability 
 }) => {
   const addProductField = () => {
+    const now = new Date();
+    const hour24 = now.getHours();
+    const hour12 = hour24 % 12 || 12;
+    const minute = `${now.getMinutes()}`.padStart(2, "0");
+    const ampm = hour24 >= 12 ? "PM" : "AM";
+
     setProducts([...products, {
       product_name: "",
       quantity: 1,
+      date: getToday(),
+      timeHour: `${hour12}`,
+      timeMinute: minute,
+      timeAMPM: ampm,
       description: "",
       price: 0,
       category: CATEGORIES.OTHERS,
       components: [],
-      customComponents: [{ name: "", quantity: "" }]
+      customComponents: [{ name: "", quantity: "", unit_price: "" }]
     }]);
   };
 
@@ -58,7 +76,7 @@ const MultipleProductInput = ({
 
   const addCustomComponent = (productIndex) => {
     const newProducts = [...products];
-    newProducts[productIndex].customComponents.push({ name: "", quantity: "" });
+    newProducts[productIndex].customComponents.push({ name: "", quantity: "", unit_price: "" });
     setProducts(newProducts);
   };
 
@@ -183,6 +201,61 @@ const MultipleProductInput = ({
                 placeholder="Enter description"
               />
             </div>
+
+            {/* Date */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Date
+              </label>
+              <input
+                type="date"
+                value={product.date || ""}
+                onChange={(e) => updateProductField(index, "date", e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              />
+            </div>
+
+            {/* Time */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Time In
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                <select
+                  value={product.timeHour || "1"}
+                  onChange={(e) => updateProductField(index, "timeHour", e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                >
+                  {Array.from({ length: 12 }, (_, i) => (
+                    <option key={i} value={i + 1}>
+                      {i + 1}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={product.timeMinute || "00"}
+                  onChange={(e) => updateProductField(index, "timeMinute", e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                >
+                  {Array.from({ length: 60 }, (_, i) => {
+                    const val = i < 10 ? `0${i}` : `${i}`;
+                    return (
+                      <option key={i} value={val}>
+                        {val}
+                      </option>
+                    );
+                  })}
+                </select>
+                <select
+                  value={product.timeAMPM || "AM"}
+                  onChange={(e) => updateProductField(index, "timeAMPM", e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                >
+                  <option value="AM">AM</option>
+                  <option value="PM">PM</option>
+                </select>
+              </div>
+            </div>
           </div>
 
           {/* Custom Components */}
@@ -203,12 +276,12 @@ const MultipleProductInput = ({
             
             <div className="space-y-2">
               {product.customComponents.map((component, compIndex) => (
-                <div key={compIndex} className="flex gap-2">
+                <div key={compIndex} className="grid grid-cols-12 gap-2 items-center">
                   <input
                     type="text"
                     value={component.name}
                     onChange={(e) => updateCustomComponent(index, compIndex, "name", e.target.value)}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="col-span-6 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     placeholder="Component name"
                   />
                   <input
@@ -216,14 +289,23 @@ const MultipleProductInput = ({
                     min="1"
                     value={component.quantity}
                     onChange={(e) => updateCustomComponent(index, compIndex, "quantity", e.target.value)}
-                    className="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="col-span-2 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     placeholder="Qty"
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={component.unit_price || ""}
+                    onChange={(e) => updateCustomComponent(index, compIndex, "unit_price", e.target.value)}
+                    className="col-span-3 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    placeholder="Unit Price"
                   />
                   {product.customComponents.length > 1 && (
                     <button
                       type="button"
                       onClick={() => removeCustomComponent(index, compIndex)}
-                      className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                      className="col-span-1 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 justify-self-center"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>

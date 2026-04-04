@@ -110,11 +110,15 @@ export default function ProductInPage() {
     {
       product_name: "",
       quantity: 1,
+      date: "",
+      timeHour: "1",
+      timeMinute: "00",
+      timeAMPM: "AM",
       description: "",
       price: 0,
       category: CATEGORIES.OTHERS,
       components: [],
-      customComponents: [{ name: "", quantity: "" }],
+      customComponents: [{ name: "", quantity: "", unit_price: "" }],
     },
   ]);
   const [isBulkSubmitting, setIsBulkSubmitting] = useState(false);
@@ -599,6 +603,12 @@ export default function ProductInPage() {
       .map((component) => ({
         name: (component?.name || "").trim(),
         quantity: Number(component?.quantity),
+        unit_price:
+          component?.unit_price === "" ||
+          component?.unit_price === null ||
+          component?.unit_price === undefined
+            ? 0
+            : Number(component?.unit_price),
       }))
       .filter((component) => component.name && component.quantity > 0);
 
@@ -689,14 +699,9 @@ export default function ProductInPage() {
   };
 
   const handleAddMultipleItems = async (e) => {
-    e.preventDefault();
+    e?.preventDefault?.();
     if (!Array.isArray(bulkProducts) || bulkProducts.length === 0) {
       setErrorBar("Add at least one product row.");
-      return;
-    }
-
-    if (!date) {
-      setErrorBar("Select a date first.");
       return;
     }
 
@@ -710,117 +715,214 @@ export default function ProductInPage() {
     setAlternativeRequest(null);
     setIsBulkSubmitting(true);
 
-    const time_in = `${timeHour}:${timeMinute} ${timeAMPM}`;
+    try {
+      const payload = [];
+      const validationErrors = [];
+      const customComponentTopUpMeta = new Map();
 
-    const payload = [];
-    const validationErrors = [];
+      bulkProducts.forEach((row, index) => {
+        const productName = (row?.product_name || "").toString().trim();
+        const quantityToAdd = Number(row?.quantity || 0);
+        const rowDate = (row?.date || "").toString().trim();
+        const rowTimeHour = (row?.timeHour || "").toString().trim();
+        const rowTimeMinute = (row?.timeMinute || "").toString().trim();
+        const rowTimeAMPM = (row?.timeAMPM || "").toString().trim();
+        const rowTimeIn = `${rowTimeHour}:${rowTimeMinute} ${rowTimeAMPM}`;
 
-    bulkProducts.forEach((row, index) => {
-      const productName = (row?.product_name || "").toString().trim();
-      const quantityToAdd = Number(row?.quantity || 0);
-
-      if (!productName) {
-        validationErrors.push(`Row ${index + 1}: missing product name.`);
-        return;
-      }
-
-      if (quantityToAdd <= 0) {
-        validationErrors.push(`Row ${index + 1}: invalid quantity.`);
-        return;
-      }
-
-      const config = products.find(
-        (p) => normalizeName(p.name) === normalizeName(productName),
-      );
-
-      let components = [];
-
-      if (config) {
-        components = (config.components || []).map((c) => ({
-          name: c.name,
-          quantity: Number(c.baseQty || 0) * quantityToAdd,
-        }));
-      } else {
-        if (!isAdmin) {
-          validationErrors.push(
-            `Row ${index + 1}: only admin can add a new/custom product (${productName}).`,
-          );
+        if (!productName) {
+          validationErrors.push(`Row ${index + 1}: missing product name.`);
           return;
         }
 
-        const custom = sanitizeBulkCustomComponents(row?.customComponents);
-        if (custom.length === 0) {
-          validationErrors.push(
-            `Row ${index + 1}: custom product needs at least one component (${productName}).`,
-          );
+        if (!rowDate) {
+          validationErrors.push(`Row ${index + 1}: missing date.`);
           return;
         }
 
-        components = custom;
-      }
+        if (!rowTimeHour || !rowTimeMinute || !rowTimeAMPM) {
+          validationErrors.push(`Row ${index + 1}: missing time.`);
+          return;
+        }
 
-      const unitPrice = Number(row?.price || 0);
-      const lineTotalPrice = unitPrice * quantityToAdd;
+        if (quantityToAdd <= 0) {
+          validationErrors.push(`Row ${index + 1}: invalid quantity.`);
+          return;
+        }
 
-      payload.push({
-        product_name: productName,
-        quantity: quantityToAdd,
-        date,
-        time_in,
-        components,
-        meta: {
-          description: (row?.description || "").toString().trim() || null,
-          price: lineTotalPrice,
-          category: row?.category || CATEGORIES.OTHERS,
-        },
+        const config = products.find(
+          (p) => normalizeName(p.name) === normalizeName(productName),
+        );
+
+        let components = [];
+
+        if (config) {
+          components = (config.components || []).map((c) => ({
+            name: c.name,
+            quantity: Number(c.baseQty || 0) * quantityToAdd,
+          }));
+        } else {
+          if (!isAdmin) {
+            validationErrors.push(
+              `Row ${index + 1}: only admin can add a new/custom product (${productName}).`,
+            );
+            return;
+          }
+
+          const custom = sanitizeBulkCustomComponents(row?.customComponents);
+          if (custom.length === 0) {
+            validationErrors.push(
+              `Row ${index + 1}: custom product needs at least one component (${productName}).`,
+            );
+            return;
+          }
+
+          components = custom.map((item) => ({
+            name: item.name,
+            quantity: item.quantity,
+          }));
+
+          custom.forEach((item) => {
+            const key = normalizeName(item.name);
+            if (!key || Number(item.unit_price || 0) <= 0) return;
+            if (!customComponentTopUpMeta.has(key)) {
+              customComponentTopUpMeta.set(key, {
+                name: item.name,
+                unitPrice: Number(item.unit_price || 0),
+                date: rowDate,
+                timeHour: rowTimeHour,
+                timeMinute: rowTimeMinute,
+                timeAMPM: rowTimeAMPM,
+              });
+            }
+          });
+        }
+
+        const unitPrice = Number(row?.price || 0);
+        const lineTotalPrice = unitPrice * quantityToAdd;
+
+        payload.push({
+          product_name: productName,
+          quantity: quantityToAdd,
+          date: rowDate,
+          time_in: rowTimeIn,
+          components,
+          meta: {
+            description: (row?.description || "").toString().trim() || null,
+            price: lineTotalPrice,
+            category: row?.category || CATEGORIES.OTHERS,
+          },
+        });
       });
-    });
 
-    if (payload.length === 0) {
-      setErrorBar(validationErrors.join(" "));
+      if (payload.length === 0) {
+        setErrorBar(validationErrors.join(" "));
+        return;
+      }
+
+      // Auto top-up missing custom components for bulk flow when unit price is provided.
+      const requiredByComponent = new Map();
+      payload.forEach((row) => {
+        (row.components || []).forEach((component) => {
+          const key = normalizeName(component?.name);
+          if (!key) return;
+          const current = Number(requiredByComponent.get(key) || 0);
+          requiredByComponent.set(
+            key,
+            current + Number(component?.quantity || 0),
+          );
+        });
+      });
+
+      const availableByComponent = (stockInItems || []).reduce((map, row) => {
+        const key = normalizeName(row?.name);
+        if (!key) return map;
+        const current = Number(map.get(key) || 0);
+        map.set(key, current + Number(row?.quantity || 0));
+        return map;
+      }, new Map());
+
+      let autoTopUpCount = 0;
+      for (const [componentKey, requiredQty] of requiredByComponent.entries()) {
+        const availableQty = Number(availableByComponent.get(componentKey) || 0);
+        const missingQty = requiredQty - availableQty;
+        if (missingQty <= 0) continue;
+
+        const topUpMeta = customComponentTopUpMeta.get(componentKey);
+        if (!topUpMeta) continue;
+
+        const topUpResult = await handleAddParcelIn({
+          name: topUpMeta.name,
+          date: topUpMeta.date,
+          quantity: missingQty,
+          timeHour: topUpMeta.timeHour,
+          timeMinute: topUpMeta.timeMinute,
+          timeAMPM: topUpMeta.timeAMPM,
+          shipping_mode: "Auto top-up (bulk custom)",
+          client_name: "",
+          price: Number(topUpMeta.unitPrice || 0) * Number(missingQty),
+          category: CATEGORIES.COMPONENT,
+        });
+
+        if (topUpResult?.newItem) {
+          availableByComponent.set(componentKey, availableQty + missingQty);
+          autoTopUpCount += 1;
+        }
+      }
+
+      if (autoTopUpCount > 0) {
+        await loadStockInItems();
+      }
+
+      const result = await handleAddMultipleProductsIn(payload);
+
+      if (validationErrors.length > 0) {
+        setErrorBar(validationErrors.join(" "));
+      }
+
+      if (!result?.success) {
+        setErrorBar(result?.message || "Unable to add multiple products.");
+      } else {
+        setSuccessBar(result?.message || "Multiple products added.");
+      }
+
+      if (Array.isArray(result?.errors) && result.errors.length > 0) {
+        const first = result.errors[0];
+        const extra =
+          first?.missingComponents?.length > 0
+            ? ` Missing: ${first.missingComponents
+                .map((c) => c?.component || c?.name)
+                .filter(Boolean)
+                .join(", ")}.`
+            : "";
+        setErrorBar(
+          `${result.message || "Some products failed."} First error: ${first.product} - ${first.error}.${extra}`,
+        );
+      }
+
+      await loadItems();
+      await loadStockInItems();
+
+      setBulkProducts([
+        {
+          product_name: "",
+          quantity: 1,
+          date: "",
+          timeHour: "1",
+          timeMinute: "00",
+          timeAMPM: "AM",
+          description: "",
+          price: 0,
+          category: CATEGORIES.OTHERS,
+          components: [],
+          customComponents: [{ name: "", quantity: "", unit_price: "" }],
+        },
+      ]);
+    } catch (error) {
+      console.error("handleAddMultipleItems error:", error);
+      setErrorBar("Multiple Product In failed unexpectedly. Please try again.");
+    } finally {
       setIsBulkSubmitting(false);
-      return;
     }
-
-    const result = await handleAddMultipleProductsIn(payload);
-
-    if (validationErrors.length > 0) {
-      setErrorBar(validationErrors.join(" "));
-    }
-
-    if (!result?.success) {
-      setErrorBar(result?.message || "Unable to add multiple products.");
-    } else {
-      setSuccessBar(result?.message || "Multiple products added.");
-    }
-
-    if (Array.isArray(result?.errors) && result.errors.length > 0) {
-      const first = result.errors[0];
-      const extra =
-        first?.missingComponents?.length > 0
-          ? ` Missing: ${first.missingComponents.map((c) => c.name).join(", ")}.`
-          : "";
-      setErrorBar(
-        `${result.message || "Some products failed."} First error: ${first.product} - ${first.error}.${extra}`,
-      );
-    }
-
-    await loadItems();
-    await loadStockInItems();
-
-    setBulkProducts([
-      {
-        product_name: "",
-        quantity: 1,
-        description: "",
-        price: 0,
-        category: CATEGORIES.OTHERS,
-        components: [],
-        customComponents: [{ name: "", quantity: "" }],
-      },
-    ]);
-
-    setIsBulkSubmitting(false);
   };
 
   const selectedProductConfig = products.find(
@@ -1185,8 +1287,7 @@ export default function ProductInPage() {
             </form>
 
             {/* Multiple Product Input */}
-            <form
-              onSubmit={handleAddMultipleItems}
+            <div
               className={`p-6 rounded-xl shadow-lg mb-8 border transition animate__animated animate__fadeInUp animate__faster ${
                 darkMode
                   ? "bg-[#1F2937] border-[#374151]"
@@ -1203,8 +1304,7 @@ export default function ProductInPage() {
                       darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"
                     }`}
                   >
-                    Add multiple products in one submission (uses the Date/Time
-                    above).
+                    Add multiple products in one submission with per-row date and time.
                   </p>
                 </div>
               </div>
@@ -1220,7 +1320,8 @@ export default function ProductInPage() {
 
               <div className="flex justify-end mt-6">
                 <button
-                  type="submit"
+                  type="button"
+                  onClick={handleAddMultipleItems}
                   disabled={isBulkSubmitting}
                   className={`px-6 py-2.5 rounded-lg font-medium flex items-center gap-2 shadow-md transition-all duration-200 hover:shadow-lg ${
                     isBulkSubmitting
@@ -1233,7 +1334,7 @@ export default function ProductInPage() {
                   <Plus className="w-5 h-5" /> Add Multiple Products
                 </button>
               </div>
-            </form>
+            </div>
 
             {/* ── Product Table ──────────────────────────────────────────── */}
             <div
