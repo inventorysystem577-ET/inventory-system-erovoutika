@@ -511,13 +511,13 @@ export default function ProductInPage() {
 
     setSelectedProduct("");
     setSingleCategory(PRODUCT_CATEGORIES.OTHER);
+    setDescription("");
     setQty(1);
     setPrice(0);
     setDate("");
     setTimeHour("1");
     setTimeMinute("00");
     setTimeAMPM("AM");
-  };
 
   const handleAddMissingToStockIn = async (payload) => {
     if (
