@@ -43,7 +43,7 @@ import {
 import { fetchParcelItems } from "../../utils/parcelShippedHelper";
 import { fetchParcelOutItems } from "../../utils/parcelOutHelper";
 import { useAuth } from "../../hook/useAuth";
-import { isAdminRole } from "../../utils/roleHelper";
+import { isAdminRole, isStaffRole } from "../../utils/roleHelper";
 import { saveAdminUndoAction } from "../../utils/adminUndo";
 import {
   buildDescription,
@@ -132,6 +132,7 @@ export default function Page() {
   const [productCategoryFilter, setProductCategoryFilter] = useState("all");
   const { role } = useAuth();
   const isAdmin = isAdminRole(role);
+  const canViewHistory = isAdmin || isStaffRole(role);
   const [isUpdatingCategoryId, setIsUpdatingCategoryId] = useState(null);
   const [categoryTransferError, setCategoryTransferError] = useState("");
   const [descriptionUpdateError, setDescriptionUpdateError] = useState("");
@@ -1599,21 +1600,23 @@ export default function Page() {
                             <td className="px-4 py-3 text-sm">{item.date}</td>
                             <td className="px-4 py-3 text-sm">
                               <div className="flex items-center gap-2">
+                                {canViewHistory ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => openHistoryModal("parcel", item)}
+                                    className={`inline-flex items-center justify-center p-2 rounded-lg border transition ${
+                                      darkMode
+                                        ? "border-[#374151] hover:bg-[#374151] text-blue-300"
+                                        : "border-[#D1D5DB] hover:bg-[#EFF6FF] text-[#1D4ED8]"
+                                    }`}
+                                    title="View stock history"
+                                    aria-label="View stock history"
+                                  >
+                                    <Search className="w-4 h-4" />
+                                  </button>
+                                ) : null}
                                 {isAdmin ? (
                                   <>
-                                    <button
-                                      type="button"
-                                      onClick={() => openHistoryModal("parcel", item)}
-                                      className={`inline-flex items-center justify-center p-2 rounded-lg border transition ${
-                                        darkMode
-                                          ? "border-[#374151] hover:bg-[#374151] text-blue-300"
-                                          : "border-[#D1D5DB] hover:bg-[#EFF6FF] text-[#1D4ED8]"
-                                      }`}
-                                      title="View stock history"
-                                      aria-label="View stock history"
-                                    >
-                                      <Search className="w-4 h-4" />
-                                    </button>
                                     <button
                                       type="button"
                                       onClick={() => openThresholdModal("parcel", item)}
@@ -1638,7 +1641,7 @@ export default function Page() {
                                     </div>
                                   </Link>
                                 ) : null}
-                                {!isAdmin && item.quantity !== 0 ? "-" : null}
+                                {!canViewHistory && item.quantity !== 0 ? "-" : null}
                               </div>
                             </td>
                           </tr>
@@ -2092,21 +2095,23 @@ export default function Page() {
                             <td className="px-4 py-3 text-sm">{item.date}</td>
                             <td className="px-4 py-3 text-sm">
                               <div className="flex items-center gap-2">
+                                {canViewHistory ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => openHistoryModal("product", item)}
+                                    className={`inline-flex items-center justify-center p-2 rounded-lg border transition ${
+                                      darkMode
+                                        ? "border-[#374151] hover:bg-[#374151] text-violet-300"
+                                        : "border-[#D1D5DB] hover:bg-[#F5F3FF] text-[#6D28D9]"
+                                    }`}
+                                    title="View stock history"
+                                    aria-label="View stock history"
+                                  >
+                                    <Search className="w-4 h-4" />
+                                  </button>
+                                ) : null}
                                 {isAdmin ? (
                                   <>
-                                    <button
-                                      type="button"
-                                      onClick={() => openHistoryModal("product", item)}
-                                      className={`inline-flex items-center justify-center p-2 rounded-lg border transition ${
-                                        darkMode
-                                          ? "border-[#374151] hover:bg-[#374151] text-violet-300"
-                                          : "border-[#D1D5DB] hover:bg-[#F5F3FF] text-[#6D28D9]"
-                                      }`}
-                                      title="View stock history"
-                                      aria-label="View stock history"
-                                    >
-                                      <Search className="w-4 h-4" />
-                                    </button>
                                     <button
                                       type="button"
                                       onClick={() => openThresholdModal("product", item)}
@@ -2131,7 +2136,7 @@ export default function Page() {
                                     </div>
                                   </Link>
                                 ) : null}
-                                {!isAdmin && item.quantity !== 0 ? "-" : null}
+                                {!canViewHistory && item.quantity !== 0 ? "-" : null}
                               </div>
                             </td>
                           </tr>

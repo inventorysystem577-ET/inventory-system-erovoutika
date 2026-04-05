@@ -1405,6 +1405,7 @@ export default function ProductInPage() {
                 items={items}
                 normalizeName={normalizeName}
                 computeComponentAvailability={computeComponentAvailability}
+                darkMode={darkMode}
               />
 
               <div className="flex justify-end mt-6">
