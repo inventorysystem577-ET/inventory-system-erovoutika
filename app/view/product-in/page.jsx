@@ -37,9 +37,38 @@ import {
 import { useAuth } from "../../hook/useAuth";
 import { isAdminRole } from "../../utils/roleHelper";
 import { buildProductCode, buildSku } from "../../utils/inventoryMeta";
-import { CATEGORIES, CATEGORY_OPTIONS } from "../../utils/categoryUtils";
+import {
+  CATEGORIES,
+  PRODUCT_CATEGORIES,
+  PRODUCT_CATEGORY_OPTIONS,
+} from "../../utils/categoryUtils";
 
 export default function ProductInPage() {
+  const buildDefaultBulkRow = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = `${now.getMonth() + 1}`.padStart(2, "0");
+    const day = `${now.getDate()}`.padStart(2, "0");
+    const hour24 = now.getHours();
+    const hour12 = hour24 % 12 || 12;
+    const minute = `${now.getMinutes()}`.padStart(2, "0");
+    const ampm = hour24 >= 12 ? "PM" : "AM";
+
+    return {
+      product_name: "",
+      quantity: 1,
+      date: `${year}-${month}-${day}`,
+      timeHour: `${hour12}`,
+      timeMinute: minute,
+      timeAMPM: ampm,
+      description: "",
+      price: 0,
+      category: PRODUCT_CATEGORIES.OTHER,
+      components: [],
+      customComponents: [{ name: "", quantity: "", unit_price: "" }],
+    };
+  };
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("product-in");
   const [showMultipleInput, setShowMultipleInput] = useState(false);
@@ -52,7 +81,9 @@ export default function ProductInPage() {
   const [stockInItems, setStockInItems] = useState([]);
   const [productSuggestions, setProductSuggestions] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState("");
-  const [singleCategory, setSingleCategory] = useState(CATEGORIES.OTHERS);
+  const [singleCategory, setSingleCategory] = useState(
+    PRODUCT_CATEGORIES.OTHER,
+  );
   const [description, setDescription] = useState("");
   const [qty, setQty] = useState(1);
   const [price, setPrice] = useState(0);
@@ -108,20 +139,8 @@ export default function ProductInPage() {
   const [customComponents, setCustomComponents] = useState([
     { name: "", quantity: "" },
   ]);
-  const [bulkProducts, setBulkProducts] = useState([
-    {
-      product_name: "",
-      quantity: 1,
-      date: "",
-      timeHour: "1",
-      timeMinute: "00",
-      timeAMPM: "AM",
-      description: "",
-      price: 0,
-      category: CATEGORIES.OTHERS,
-      components: [],
-      customComponents: [{ name: "", quantity: "", unit_price: "" }],
-    },
+  const [bulkProducts, setBulkProducts] = useState(() => [
+    buildDefaultBulkRow(),
   ]);
   const [isBulkSubmitting, setIsBulkSubmitting] = useState(false);
   const [customComponentsError, setCustomComponentsError] = useState("");
@@ -481,7 +500,7 @@ export default function ProductInPage() {
     await loadStockInItems();
 
     setSelectedProduct("");
-    setSingleCategory(CATEGORIES.OTHERS);
+    setSingleCategory(PRODUCT_CATEGORIES.OTHER);
     setQty(1);
     setPrice(0);
     setDate("");
@@ -718,7 +737,7 @@ export default function ProductInPage() {
     await loadStockInItems();
 
     setSelectedProduct("");
-    setSingleCategory(CATEGORIES.OTHERS);
+    setSingleCategory(PRODUCT_CATEGORIES.OTHER);
     setDescription("");
     setQty(1);
     setPrice(0);
@@ -842,7 +861,7 @@ export default function ProductInPage() {
           meta: {
             description: (row?.description || "").toString().trim() || null,
             price: lineTotalPrice,
-            category: row?.category || CATEGORIES.OTHERS,
+            category: row?.category || PRODUCT_CATEGORIES.OTHER,
           },
         });
       });
@@ -935,21 +954,7 @@ export default function ProductInPage() {
       await loadItems();
       await loadStockInItems();
 
-      setBulkProducts([
-        {
-          product_name: "",
-          quantity: 1,
-          date: "",
-          timeHour: "1",
-          timeMinute: "00",
-          timeAMPM: "AM",
-          description: "",
-          price: 0,
-          category: CATEGORIES.OTHERS,
-          components: [],
-          customComponents: [{ name: "", quantity: "", unit_price: "" }],
-        },
-      ]);
+      setBulkProducts([buildDefaultBulkRow()]);
     } catch (error) {
       console.error("handleAddMultipleItems error:", error);
       setErrorBar("Multiple Product In failed unexpectedly. Please try again.");
@@ -1269,7 +1274,7 @@ export default function ProductInPage() {
                         : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
                     }`}
                   >
-                    {CATEGORY_OPTIONS.map((option) => (
+                    {PRODUCT_CATEGORY_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
                       </option>

@@ -53,6 +53,8 @@ import {
 import {
   CATEGORIES,
   CATEGORY_OPTIONS,
+  PRODUCT_CATEGORIES,
+  PRODUCT_CATEGORY_OPTIONS,
   getCategoryColor,
   getCategoryIcon,
 } from "../../utils/categoryUtils";
@@ -469,7 +471,9 @@ export default function Page() {
   const transferCategory = async ({ type, id, nextCategory }) => {
     setCategoryTransferError("");
     setIsUpdatingCategoryId(id);
-    const categoryValue = nextCategory || CATEGORIES.OTHERS;
+    const categoryValue =
+      nextCategory ||
+      (type === "product" ? PRODUCT_CATEGORIES.OTHER : CATEGORIES.OTHERS);
 
     try {
       if (type === "parcel") {
@@ -1785,7 +1789,7 @@ export default function Page() {
                     className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm ${darkMode ? "border-[#374151] focus:ring-[#a78bfa] focus:border-[#a78bfa] bg-[#111827] text-white" : "border-[#D1D5DB] focus:ring-[#7c3aed] focus:border-[#7c3aed] bg-white text-black"}`}
                   >
                     <option value="all">All Categories</option>
-                    {CATEGORY_OPTIONS.map((cat) => (
+                    {PRODUCT_CATEGORY_OPTIONS.map((cat) => (
                       <option key={cat.value} value={cat.value}>
                         {cat.label}
                       </option>
@@ -2033,7 +2037,7 @@ export default function Page() {
                                     {item.category || "Others"}
                                   </span>
                                   <select
-                                    value={item.category || CATEGORIES.OTHERS}
+                                    value={item.category || PRODUCT_CATEGORIES.OTHER}
                                     onChange={(e) =>
                                       transferCategory({
                                         type: "product",
@@ -2049,7 +2053,7 @@ export default function Page() {
                                     }`}
                                     aria-label="Transfer category"
                                   >
-                                    {CATEGORY_OPTIONS.map((option) => (
+                                    {PRODUCT_CATEGORY_OPTIONS.map((option) => (
                                       <option
                                         key={option.value}
                                         value={option.value}

@@ -342,7 +342,7 @@ export default function page() {
             <div className="mb-8">
               <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
                 <Package className="w-5 h-5 text-[#1e40af]" />
-                Component Stock Status
+                Stock Status
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <DashboardStatusCard
@@ -540,7 +540,7 @@ export default function page() {
               >
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold">
-                    Components Needing Attention
+                    Stocks Needing Attention
                   </h3>
                   <span
                     className={`px-3 py-1 rounded-full text-xs font-medium ${darkMode ? "bg-orange-900/30 text-orange-400" : "bg-orange-50 text-orange-700"}`}
