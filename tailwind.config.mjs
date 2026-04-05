@@ -8,8 +8,9 @@ export default {
   theme: {
     extend: {},
   },
-  plugins: [
-    // DaisyUI not yet compatible with Tailwind v4
-    // You can add custom utilities here if needed
-  ],
-}
+  plugins: [],
+  // Minimal configuration
+  corePlugins: {
+    preflight: true,
+  },
+};

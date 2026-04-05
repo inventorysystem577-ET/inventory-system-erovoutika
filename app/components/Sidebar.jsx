@@ -8,6 +8,8 @@ import {
   LogOut,
   ArrowDownToLine,
   ArrowUpFromLine,
+  ArrowRightLeft,
+  Truck,
 } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 import { handleLogout } from "../controller/logoutController";
@@ -38,6 +40,18 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen, darkMode }) {
       label: "Stock In",
       icon: Package,
       path: "/view/parcel-shipped",
+    },
+    {
+      id: "Stock Transfer",
+      label: "Stock Transfer",
+      icon: ArrowRightLeft,
+      path: "/view/stock-transfer",
+    },
+    {
+      id: "Product Transfer",
+      label: "Product Transfer",
+      icon: Truck,
+      path: "/view/product-transfer",
     },
     {
       id: "Inventory Stock",
