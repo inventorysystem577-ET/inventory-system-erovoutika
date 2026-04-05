@@ -21,9 +21,12 @@ import {
 } from "../../controller/productController";
 import AuthGuard from "../../components/AuthGuard";
 import { buildProductCode, buildSku } from "../../utils/inventoryMeta";
+import { useAuth } from "../../hook/useAuth";
+import { isAdminRole } from "../../utils/roleHelper";
 
 export default function ProductOutPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showMultipleOutInput, setShowMultipleOutInput] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
 
   const [items, setItems] = useState([]);
@@ -52,9 +55,12 @@ export default function ProductOutPage() {
   const [bulkOutMessage, setBulkOutMessage] = useState("");
   const [bulkOutError, setBulkOutError] = useState("");
   const [isBulkOutSubmitting, setIsBulkOutSubmitting] = useState(false);
+  const [showProductOutHistory, setShowProductOutHistory] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(5);
+  const { role } = useAuth();
+  const isAdmin = isAdminRole(role);
 
   const DESCRIPTION_TRUNCATE_LIMIT = 120;
   const truncateText = (value, maxLength) => {
@@ -524,6 +530,7 @@ export default function ProductOutPage() {
             </div>
 
             {/* Form */}
+            {!showMultipleOutInput && (
             <form
               onSubmit={handleAddItem}
               className={`p-6 rounded-xl shadow-lg mb-8 border ${
@@ -745,7 +752,18 @@ export default function ProductOutPage() {
                 </div>
               </div>
 
-              <div className="flex justify-end">
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowMultipleOutInput(true)}
+                  className={`px-6 py-2.5 rounded-lg font-medium transition-all duration-200 ${
+                    darkMode
+                      ? "bg-[#374151] text-[#D1D5DB] hover:bg-[#4B5563]"
+                      : "bg-[#E5E7EB] text-[#374151] hover:bg-[#D1D5DB]"
+                  }`}
+                >
+                  Multiple Product OUT
+                </button>
                 <button
                   type="submit"
                   className="bg-red-600 hover:bg-red-700 text-white px-6 py-2.5 rounded-lg font-medium flex items-center gap-2 shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -768,8 +786,10 @@ export default function ProductOutPage() {
                 </div>
               )}
             </form>
+            )}
 
             {/* Multiple Product OUT */}
+            {showMultipleOutInput && (
             <form
               onSubmit={handleAddMultipleOutItems}
               className={`p-6 rounded-xl shadow-lg mb-8 border ${
@@ -790,18 +810,31 @@ export default function ProductOutPage() {
                     Shipping/Client fields above).
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={addBulkOutRow}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium border transition ${
-                    darkMode
-                      ? "border-[#374151] hover:bg-[#374151]/60 text-[#D1D5DB]"
-                      : "border-[#E5E7EB] hover:bg-gray-50 text-[#374151]"
-                  }`}
-                >
-                  <Plus className="w-4 h-4 inline-block mr-1" />
-                  Add Row
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowMultipleOutInput(false)}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                      darkMode
+                        ? "bg-[#374151] text-[#D1D5DB] hover:bg-[#4B5563]"
+                        : "bg-[#E5E7EB] text-[#374151] hover:bg-[#D1D5DB]"
+                    }`}
+                  >
+                    Back to Single Product OUT
+                  </button>
+                  <button
+                    type="button"
+                    onClick={addBulkOutRow}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium border transition ${
+                      darkMode
+                        ? "border-[#374151] hover:bg-[#374151]/60 text-[#D1D5DB]"
+                        : "border-[#E5E7EB] hover:bg-gray-50 text-[#374151]"
+                    }`}
+                  >
+                    <Plus className="w-4 h-4 inline-block mr-1" />
+                    Add Row
+                  </button>
+                </div>
               </div>
 
               {bulkOutError && (
@@ -984,7 +1017,31 @@ export default function ProductOutPage() {
                 </button>
               </div>
             </form>
+            )}
 
+            {isAdmin && (
+              <div
+                className={`rounded-xl shadow-xl overflow-hidden border mb-4 ${
+                  darkMode
+                    ? "bg-[#1F2937] border-[#374151]"
+                    : "bg-white border-[#E5E7EB]"
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setShowProductOutHistory((prev) => !prev)}
+                  className={`w-full text-left px-4 py-3 text-sm font-semibold uppercase tracking-wide ${
+                    darkMode
+                      ? "bg-[#111827] text-[#D1D5DB] hover:bg-[#1F2937]"
+                      : "bg-[#F9FAFB] text-[#374151] hover:bg-[#F3F4F6]"
+                  }`}
+                >
+                  {showProductOutHistory ? "hide" : "show"}
+                </button>
+              </div>
+            )}
+
+            {isAdmin && showProductOutHistory && (
             <div
               className={`rounded-xl border p-4 mb-4 ${
                 darkMode
@@ -1044,8 +1101,10 @@ export default function ProductOutPage() {
                 </div>
               </div>
             </div>
+            )}
 
             {/* Table */}
+            {isAdmin && showProductOutHistory && (
             <div
               className={`rounded-xl shadow-xl overflow-hidden border ${
                 darkMode
@@ -1293,6 +1352,7 @@ export default function ProductOutPage() {
                 </div>
               )}
             </div>
+            )}
           </div>
         </main>
       </div>

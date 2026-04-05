@@ -21,6 +21,8 @@ import {
   updateParcelInItemHelper,
 } from "../../utils/parcelShippedHelper";
 import AuthGuard from "../../components/AuthGuard";
+import { useAuth } from "../../hook/useAuth";
+import { isAdminRole } from "../../utils/roleHelper";
 import { products } from "../../utils/productsData";
 import { CATEGORIES, CATEGORY_OPTIONS, getCategoryColor, getCategoryIcon } from "../../utils/categoryUtils";
 import { buildProductCode } from "../../utils/inventoryMeta";
@@ -46,6 +48,9 @@ export default function Page() {
   const [itemSuggestions, setItemSuggestions] = useState([]);
   const computedTotalPrice = (Number(price) || 0) * (Number(quantity) || 0);
   const [isUpdatingCategoryId, setIsUpdatingCategoryId] = useState(null);
+  const [showStockInHistory, setShowStockInHistory] = useState(false);
+  const { role } = useAuth();
+  const isAdmin = isAdminRole(role);
 
   // Calculate unique items (count of distinct item names)
   const getUniqueItemCount = (itemsList) => {
@@ -541,6 +546,30 @@ export default function Page() {
               </div>
             </form>
 
+            {isAdmin && (
+              <div
+                className={`rounded-xl shadow-xl overflow-hidden border mb-4 ${
+                  darkMode
+                    ? "bg-[#1F2937] border-[#374151]"
+                    : "bg-white border-[#E5E7EB]"
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setShowStockInHistory((prev) => !prev)}
+                  className={`w-full text-left px-4 py-3 text-sm font-semibold uppercase tracking-wide ${
+                    darkMode
+                      ? "bg-[#111827] text-[#D1D5DB] hover:bg-[#1F2937]"
+                      : "bg-[#F9FAFB] text-[#374151] hover:bg-[#F3F4F6]"
+                  }`}
+                >
+                  {showStockInHistory ? "hide" : "show"}
+                </button>
+              </div>
+            )}
+
+            {isAdmin && showStockInHistory && (
+            <>
             {/* Stats */}
             <div
               className={`mb-6 flex justify-between p-4 rounded-lg shadow animate__animated animate__fadeInUp animate__fast ${
@@ -797,6 +826,8 @@ export default function Page() {
                 </div>
               )}
             </div>
+            </>
+            )}
           </div>
         </main>
       </div>

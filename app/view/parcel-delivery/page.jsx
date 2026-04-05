@@ -35,6 +35,7 @@ export default function Page() {
   const [selectedFilter, setSelectedFilter] = useState("");
   const computedTotalPrice = (Number(price) || 0) * (Number(quantity) || 0);
   const [isUpdatingCategoryId, setIsUpdatingCategoryId] = useState(null);
+  const [showStockOutHistory, setShowStockOutHistory] = useState(false);
 
   const handleTransferCategory = async (itemId, nextCategory) => {
     setIsUpdatingCategoryId(itemId);
@@ -537,6 +538,28 @@ export default function Page() {
               </div>
             </form>
 
+            <div
+              className={`rounded-xl shadow-xl overflow-hidden border mb-4 ${
+                darkMode
+                  ? "bg-[#1F2937] border-[#374151]"
+                  : "bg-white border-[#E5E7EB]"
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => setShowStockOutHistory((prev) => !prev)}
+                className={`w-full text-left px-4 py-3 text-sm font-semibold uppercase tracking-wide ${
+                  darkMode
+                    ? "bg-[#111827] text-[#D1D5DB] hover:bg-[#1F2937]"
+                    : "bg-[#F9FAFB] text-[#374151] hover:bg-[#F3F4F6]"
+                }`}
+              >
+                {showStockOutHistory ? "hide" : "show"}
+              </button>
+            </div>
+
+            {showStockOutHistory && (
+            <>
             {/* Filter */}
             <div className="flex items-center gap-2 mb-4">
               <label
@@ -765,6 +788,8 @@ export default function Page() {
                 </table>
               </div>
             </div>
+            </>
+            )}
           </div>
         </main>
       </div>
