@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from "react";
 import TopNavbar from "../../components/TopNavbar";
 import Sidebar from "../../components/Sidebar";
+import { logActivity } from "../../utils/logActivity";
 import { useSearchParams } from "next/navigation";
 import {
   PackageCheck,
@@ -49,7 +50,7 @@ export default function Page() {
   const computedTotalPrice = (Number(price) || 0) * (Number(quantity) || 0);
   const [isUpdatingCategoryId, setIsUpdatingCategoryId] = useState(null);
   const [showStockInHistory, setShowStockInHistory] = useState(false);
-  const { role } = useAuth();
+  const { role, displayName, userEmail } = useAuth();
   const isAdmin = isAdminRole(role);
 
   // Calculate unique items (count of distinct item names)
@@ -157,6 +158,15 @@ export default function Page() {
     });
     if (!result || !result.newItem) return;
 
+    await logActivity({
+      userId: userEmail || null,
+     userName: displayName || userEmail || "Unknown User",
+      userType: role || "staff",
+      action: "Stock IN",
+      module: "Inventory",
+      details: `Added ${quantity}x ${name}`,
+    });
+    
     setItems(
       result.items
         .map((item) => ({ ...item, quantity: Number(item.quantity || 0) }))

@@ -5,6 +5,8 @@ import React, { useState, useEffect } from "react";
 import AuthGuard from "../../components/AuthGuard";
 import TopNavbar from "../../components/TopNavbar";
 import Sidebar from "../../components/Sidebar";
+import { logActivity } from "../../utils/logActivity";
+import { useAuth } from "../../hook/useAuth";
 import { PackageOpen, Plus, Clock, Calendar, Package } from "lucide-react";
 import "animate.css";
 import {
@@ -24,6 +26,7 @@ export default function Page() {
   const [availableItems, setAvailableItems] = useState([]);
   const [selectedItemId, setSelectedItemId] = useState("");
   const [date, setDate] = useState("");
+  const { role, displayName, userEmail } = useAuth();
   const [quantity, setQuantity] = useState(1);
   const [timeHour, setTimeHour] = useState("1");
   const [timeMinute, setTimeMinute] = useState("00");
@@ -142,8 +145,17 @@ export default function Page() {
 
     if (!result || !result.newItem) return;
 
-    setItems(result.updatedOut || []);
-    setAvailableItems(aggregateAvailableItems(result.updatedIn || []));
+    await logActivity({
+      userId: userEmail || null,
+      userName: displayName || userEmail || "Unknown User",
+      userType: role || "staff",
+      action: "Stock OUT",
+      module: "Inventory",
+      details: `Removed ${quantity}x ${selectedItemId} (Client: ${clientName || "N/A"})`,
+    });
+
+setItems(result.updatedOut || []);
+setAvailableItems(aggregateAvailableItems(result.updatedIn || []));
 
     alert(
       `✅ Successfully created Parcel Out!\n` +

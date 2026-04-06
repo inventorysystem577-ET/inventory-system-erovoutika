@@ -3,11 +3,12 @@
 
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import * as XLSX from "xlsx";
+
 import React, { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import Sidebar from "../../components/Sidebar";
 import TopNavbar from "../../components/TopNavbar";
+import { logActivity } from "../../utils/logActivity";
 import AuthGuard from "../../components/AuthGuard";
 import StockHistoryModal from "../../components/StockHistoryModal";
 import StockThresholdModal from "../../components/StockThresholdModal";
@@ -130,7 +131,7 @@ export default function Page() {
   const [productSearch, setProductSearch] = useState("");
   const [parcelCategoryFilter, setParcelCategoryFilter] = useState("all");
   const [productCategoryFilter, setProductCategoryFilter] = useState("all");
-  const { role } = useAuth();
+  const { role, displayName, userEmail } = useAuth();
   const isAdmin = isAdminRole(role);
   const canViewHistory = isAdmin || isStaffRole(role);
   const [isUpdatingCategoryId, setIsUpdatingCategoryId] = useState(null);
@@ -470,40 +471,60 @@ export default function Page() {
   });
 
   const transferCategory = async ({ type, id, nextCategory }) => {
-    setCategoryTransferError("");
-    setIsUpdatingCategoryId(id);
-    const categoryValue =
-      nextCategory ||
-      (type === "product" ? PRODUCT_CATEGORIES.OTHER : CATEGORIES.OTHERS);
+  setCategoryTransferError("");
+  setIsUpdatingCategoryId(id);
+  const categoryValue =
+    nextCategory ||
+    (type === "product" ? PRODUCT_CATEGORIES.OTHER : CATEGORIES.OTHERS);
 
-    try {
-      if (type === "parcel") {
-        const result = await updateParcelInItem(id, { category: categoryValue });
-        if (result?.error) throw result.error;
-        setParcelItems((prev) =>
-          prev.map((row) =>
-            row.id === id ? { ...row, category: categoryValue } : row,
-          ),
-        );
-      }
+  try {
+    if (type === "parcel") {
+      const result = await updateParcelInItem(id, { category: categoryValue });
+      if (result?.error) throw result.error;
 
-      if (type === "product") {
-        const result = await updateProductIn(id, { category: categoryValue });
-        if (result?.error) throw result.error;
-        setProductItems((prev) =>
-          prev.map((row) =>
-            row.id === id ? { ...row, category: categoryValue } : row,
-          ),
-        );
-      }
-    } catch (err) {
-      setCategoryTransferError(
-        err?.message || "Failed to transfer category. Please try again.",
+      setParcelItems((prev) =>
+        prev.map((row) =>
+          row.id === id ? { ...row, category: categoryValue } : row,
+        ),
       );
-    } finally {
-      setIsUpdatingCategoryId(null);
+
+      await logActivity({
+        userId: userEmail || null,
+        userName: displayName || userEmail || "Unknown User",
+        userType: role || "staff",
+        action: "UPDATE_CATEGORY",
+        module: "Inventory",
+        details: `Changed parcel category to ${categoryValue}`,
+      });
     }
-  };
+
+    if (type === "product") {
+      const result = await updateProductIn(id, { category: categoryValue });
+      if (result?.error) throw result.error;
+
+      setProductItems((prev) =>
+        prev.map((row) =>
+          row.id === id ? { ...row, category: categoryValue } : row,
+        ),
+      );
+
+      await logActivity({
+        userId: userEmail || null,
+        userName: displayName || userEmail || "Unknown User",
+        userType: role || "staff",
+        action: "UPDATE_CATEGORY",
+        module: "Inventory",
+        details: `Changed product category to ${categoryValue}`,
+      });
+    }
+  } catch (err) {
+    setCategoryTransferError(
+      err?.message || "Failed to transfer category. Please try again.",
+    );
+  } finally {
+    setIsUpdatingCategoryId(null);
+  }
+};
 
   const countByStatus = (items = [], type) => {
     return items.reduce(
@@ -648,6 +669,19 @@ export default function Page() {
     let prodUpdated = 0;
     let prodDeleted = 0;
     const errors = [];
+
+    if (errors.length === 0) {
+      await logActivity({
+        userId: userEmail || null,
+        userName: displayName || userEmail || "Unknown User",
+        userType: role || "staff",
+        action: "IMPORT INVENTORY",
+        module: "Inventory",
+        details: `Imported inventory:
+    Components -> +${compAdded} / ~${compUpdated} / -${compDeleted}
+    Products -> +${prodAdded} / ~${prodUpdated} / -${prodDeleted}`,
+      });
+    }
 
     // ===== COMPONENTS — FULL SYNC (parcel_in table) =====
     const { data: existingParcels } = await getParcelInItems();

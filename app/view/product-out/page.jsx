@@ -355,6 +355,15 @@ export default function ProductOutPage() {
     setIsBulkOutSubmitting(false);
     loadItems();
     loadAvailableProducts();
+
+    await logActivity({
+      userId: userEmail || null,
+      userName: displayName || userEmail || "Unknown User",
+      userType: role || "staff",
+      action: "Product OUT (Multiple)",
+      module: "Inventory",
+      details: payload.map((p) => `${p.quantity}x ${p.product_name}`).join(", "),
+    });
   };
 
   const formatTo12Hour = (time) => {

@@ -476,6 +476,7 @@ export default function ProductInPage() {
           dateValue: alternativeRequest.date,
           timeInValue: alternativeRequest.time_in,
           components: alternativeRequest.components,
+          categoryValue: alternativeRequest.category || singleCategory,
         });
         setShowMissingComponentsModal(true);
         setErrorBar("");
@@ -497,6 +498,7 @@ export default function ProductInPage() {
     setSuccessBar(`Product IN added using alternative materials.${altText}`);
     setAlternativeRequest(null);
     setPendingProductInRequest(null);
+
     await loadItems();
     await loadStockInItems();
 
@@ -506,7 +508,7 @@ export default function ProductInPage() {
       userType: role || "staff",
       action: "Product IN",
       module: "Inventory",
-      details: `Added ${quantityToAdd}x ${productName}`,
+      details: `Added ${alternativeRequest.quantity}x ${alternativeRequest.product_name}`,
     });
 
     setSelectedProduct("");
@@ -518,6 +520,10 @@ export default function ProductInPage() {
     setTimeHour("1");
     setTimeMinute("00");
     setTimeAMPM("AM");
+    setCustomComponents([{ name: "", quantity: "" }]);
+    setCustomComponentsError("");
+    setShowCustomComponentsModal(false);
+  };
 
   const handleAddMissingToStockIn = async (payload) => {
     if (
@@ -746,6 +752,15 @@ export default function ProductInPage() {
     await loadItems();
     await loadStockInItems();
 
+    await logActivity({
+      userId: userEmail || null,
+      userName: displayName || userEmail || "Unknown User",
+      userType: role || "staff",
+      action: "Product IN",
+      module: "Inventory",
+      details: `Added ${quantityToAdd}x ${productName}`,
+    });
+
     setSelectedProduct("");
     setSingleCategory(PRODUCT_CATEGORIES.OTHER);
     setDescription("");
@@ -881,7 +896,6 @@ export default function ProductInPage() {
         return;
       }
 
-      // Auto top-up missing custom components for bulk flow when unit price is provided.
       const requiredByComponent = new Map();
       payload.forEach((row) => {
         (row.components || []).forEach((component) => {
@@ -964,6 +978,15 @@ export default function ProductInPage() {
       await loadItems();
       await loadStockInItems();
 
+      await logActivity({
+      userId: userEmail || null,
+      userName: displayName || userEmail || "Unknown User",
+      userType: role || "staff",
+      action: "Product IN (Multiple)",
+      module: "Inventory",
+      details: payload.map((p) => `${p.quantity}x ${p.product_name}`).join(", "),
+    });
+
       setBulkProducts([buildDefaultBulkRow()]);
     } catch (error) {
       console.error("handleAddMultipleItems error:", error);
@@ -979,7 +1002,6 @@ export default function ProductInPage() {
   const noDefinedComponents =
     (selectedProductConfig?.components || []).length === 0;
 
-  // ── Table column definitions ──────────────────────────────────────────────
   const TABLE_COLUMNS = [
     { label: "PRODUCT CODE", thClass: "text-center w-[140px] min-w-[140px]" },
     { label: "PRODUCT NAME", thClass: "text-center w-[150px] min-w-[150px]" },
@@ -998,7 +1020,6 @@ export default function ProductInPage() {
           darkMode ? "dark bg-[#0B0B0B] text-white" : "bg-[#F9FAFB] text-black"
         }`}
       >
-        {/* Navbar */}
         <div
           className={`fixed top-0 left-0 right-0 z-50 backdrop-blur-xl border-b shadow-sm animate__animated animate__fadeInDown animate__faster ${
             darkMode
@@ -1014,7 +1035,6 @@ export default function ProductInPage() {
           />
         </div>
 
-        {/* Sidebar */}
         <Sidebar
           sidebarOpen={sidebarOpen}
           activeTab={activeTab}
@@ -1023,14 +1043,12 @@ export default function ProductInPage() {
           darkMode={darkMode}
         />
 
-        {/* Main scrollable content */}
         <main
           className={`flex-1 overflow-y-auto pt-20 transition-all duration-300 ${
             sidebarOpen ? "lg:ml-64" : ""
           } ${darkMode ? "bg-[#0B0B0B]" : "bg-[#F9FAFB]"}`}
         >
           <div className="max-w-[1200px] mx-auto px-6 py-8">
-            {/* Header */}
             <div className="mb-10 animate__animated animate__fadeInDown animate__faster">
               <div className="flex items-center justify-center gap-4 mb-2">
                 <div
@@ -1063,381 +1081,372 @@ export default function ProductInPage() {
               </p>
             </div>
 
-            {/* Add Item Form */}
             {!showMultipleInput && (
-            <form
-              onSubmit={handleAddItem}
-              className={`p-6 rounded-xl shadow-lg mb-8 border transition animate__animated animate__fadeInUp animate__faster ${
-                darkMode
-                  ? "bg-[#1F2937] border-[#374151]"
-                  : "bg-white border-[#E5E7EB]"
-              }`}
-            >
-              {errorBar && (
-                <div
-                  className={`mb-4 rounded-lg border px-4 py-3 text-sm flex items-start gap-2 ${
-                    darkMode
-                      ? "bg-[#111827] border-[#374151] text-[#D1D5DB]"
-                      : "bg-[#F9FAFB] border-[#E5E7EB] text-[#374151]"
-                  }`}
-                >
-                  <AlertTriangle className="w-4 h-4 mt-0.5" />
-                  <span>{errorBar}</span>
-                </div>
-              )}
-
-              {successBar && (
-                <div
-                  className={`mb-4 rounded-lg border px-4 py-3 text-sm ${
-                    darkMode
-                      ? "bg-green-900/20 border-green-800 text-green-300"
-                      : "bg-green-50 border-green-200 text-green-700"
-                  }`}
-                >
-                  {successBar}
-                </div>
-              )}
-
-              {alternativeRequest && (
-                <div
-                  className={`mb-4 rounded-lg border px-4 py-3 text-sm ${
-                    darkMode
-                      ? "bg-yellow-900/20 border-yellow-800 text-yellow-300"
-                      : "bg-yellow-50 border-yellow-200 text-yellow-700"
-                  }`}
-                >
-                  <p className="mb-2 font-semibold">
-                    Alternative material available in Stock In.
-                  </p>
-                  <p className="mb-3">
-                    {alternativeRequest.alternatives
-                      .map((item) => {
-                        const suggestions = item.suggestions
-                          .map((alt) => `${alt.name} (${alt.available})`)
-                          .join(", ");
-                        return `${item.component}: ${suggestions}`;
-                      })
-                      .join(" | ")}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleUseAlternatives}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-yellow-600 hover:bg-yellow-700 text-white transition-colors"
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                    Use Alternatives
-                  </button>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 xl:grid-cols-8 gap-2.5 mb-4">
-                {/* Product */}
-                <div className="lg:col-span-2 xl:col-span-3">
-                  <label
-                    className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
-                    <Package className="w-4 h-4" /> Product Name
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Type or select product"
-                    value={selectedProduct}
-                    onChange={(e) => {
-                      setSelectedProduct(e.target.value);
-                      setPrice(0);
-                    }}
-                    list="product-in-suggestions"
-                    className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all ${
+              <form
+                onSubmit={handleAddItem}
+                className={`p-6 rounded-xl shadow-lg mb-8 border transition animate__animated animate__fadeInUp animate__faster ${
+                  darkMode
+                    ? "bg-[#1F2937] border-[#374151]"
+                    : "bg-white border-[#E5E7EB]"
+                }`}
+              >
+                {errorBar && (
+                  <div
+                    className={`mb-4 rounded-lg border px-4 py-3 text-sm flex items-start gap-2 ${
                       darkMode
-                        ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
-                        : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
+                        ? "bg-[#111827] border-[#374151] text-[#D1D5DB]"
+                        : "bg-[#F9FAFB] border-[#E5E7EB] text-[#374151]"
                     }`}
-                    required
-                  />
-                  <datalist id="product-in-suggestions">
-                    {productSuggestions.map((suggestion) => (
-                      <option key={suggestion} value={suggestion} />
-                    ))}
-                  </datalist>
-                  {selectedProduct && (
-                    <p
-                      className={`text-sm mt-2 ${darkMode ? "text-gray-400" : "text-gray-600"}`}
-                    >
-                      Current Stock: {currentStock}
+                  >
+                    <AlertTriangle className="w-4 h-4 mt-0.5" />
+                    <span>{errorBar}</span>
+                  </div>
+                )}
+
+                {successBar && (
+                  <div
+                    className={`mb-4 rounded-lg border px-4 py-3 text-sm ${
+                      darkMode
+                        ? "bg-green-900/20 border-green-800 text-green-300"
+                        : "bg-green-50 border-green-200 text-green-700"
+                    }`}
+                  >
+                    {successBar}
+                  </div>
+                )}
+
+                {alternativeRequest && (
+                  <div
+                    className={`mb-4 rounded-lg border px-4 py-3 text-sm ${
+                      darkMode
+                        ? "bg-yellow-900/20 border-yellow-800 text-yellow-300"
+                        : "bg-yellow-50 border-yellow-200 text-yellow-700"
+                    }`}
+                  >
+                    <p className="mb-2 font-semibold">
+                      Alternative material available in Stock In.
                     </p>
-                  )}
-                </div>
+                    <p className="mb-3">
+                      {alternativeRequest.alternatives
+                        .map((item) => {
+                          const suggestions = item.suggestions
+                            .map((alt) => `${alt.name} (${alt.available})`)
+                            .join(", ");
+                          return `${item.component}: ${suggestions}`;
+                        })
+                        .join(" | ")}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleUseAlternatives}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-yellow-600 hover:bg-yellow-700 text-white transition-colors"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Use Alternatives
+                    </button>
+                  </div>
+                )}
 
-                {/* Description */}
-                <div className="lg:col-span-2">
-                  <label
-                    className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
-                    <Package className="w-4 h-4" /> Description
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Enter product description"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    list="product-in-description-suggestions"
-                    className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
-                        : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
-                    }`}
-                  />
-                  <datalist id="product-in-description-suggestions">
-                    {descriptionSuggestions.map((suggestion) => (
-                      <option key={suggestion} value={suggestion} />
-                    ))}
-                  </datalist>
-                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 xl:grid-cols-8 gap-2.5 mb-4">
+                  <div className="lg:col-span-2 xl:col-span-3">
+                    <label
+                      className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
+                        darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
+                      }`}
+                    >
+                      <Package className="w-4 h-4" /> Product Name
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Type or select product"
+                      value={selectedProduct}
+                      onChange={(e) => {
+                        setSelectedProduct(e.target.value);
+                        setPrice(0);
+                      }}
+                      list="product-in-suggestions"
+                      className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all ${
+                        darkMode
+                          ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
+                          : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
+                      }`}
+                      required
+                    />
+                    <datalist id="product-in-suggestions">
+                      {productSuggestions.map((suggestion) => (
+                        <option key={suggestion} value={suggestion} />
+                      ))}
+                    </datalist>
+                    {selectedProduct && (
+                      <p
+                        className={`text-sm mt-2 ${darkMode ? "text-gray-400" : "text-gray-600"}`}
+                      >
+                        Current Stock: {currentStock}
+                      </p>
+                    )}
+                  </div>
 
-                {/* Price */}
-                <div className="lg:col-span-1">
-                  <label
-                    className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
-                    <Package className="w-4 h-4" /> Price
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={price}
-                    onChange={(e) => setPrice(e.target.value)}
-                    className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
-                        : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
-                    }`}
-                    required
-                  />
-                </div>
+                  <div className="lg:col-span-2">
+                    <label
+                      className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
+                        darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
+                      }`}
+                    >
+                      <Package className="w-4 h-4" /> Description
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Enter product description"
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      list="product-in-description-suggestions"
+                      className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all ${
+                        darkMode
+                          ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
+                          : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
+                      }`}
+                    />
+                    <datalist id="product-in-description-suggestions">
+                      {descriptionSuggestions.map((suggestion) => (
+                        <option key={suggestion} value={suggestion} />
+                      ))}
+                    </datalist>
+                  </div>
 
-                {/* Quantity */}
-                <div className="lg:col-span-1">
-                  <label
-                    className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
-                    <Package className="w-4 h-4" /> Quantity
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={qty}
-                    onChange={(e) => setQty(e.target.value)}
-                    className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
-                        : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
-                    }`}
-                    required
-                  />
-                </div>
+                  <div className="lg:col-span-1">
+                    <label
+                      className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
+                        darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
+                      }`}
+                    >
+                      <Package className="w-4 h-4" /> Price
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={price}
+                      onChange={(e) => setPrice(e.target.value)}
+                      className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all ${
+                        darkMode
+                          ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
+                          : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
+                      }`}
+                      required
+                    />
+                  </div>
 
-                {/* Date */}
-                <div className="lg:col-span-1">
-                  <label
-                    className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
-                    <Calendar className="w-4 h-4" /> Date
-                  </label>
-                  <input
-                    type="date"
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
-                        : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
-                    } min-w-[120px]`}
-                    required
-                  />
-                </div>
+                  <div className="lg:col-span-1">
+                    <label
+                      className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
+                        darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
+                      }`}
+                    >
+                      <Package className="w-4 h-4" /> Quantity
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={qty}
+                      onChange={(e) => setQty(e.target.value)}
+                      className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all ${
+                        darkMode
+                          ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
+                          : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
+                      }`}
+                      required
+                    />
+                  </div>
 
-                {/* Category */}
-                <div className="md:col-span-2 lg:col-span-2 xl:col-span-2">
-                  <label
-                    className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
-                    <Package className="w-4 h-4" /> Category
-                  </label>
-                  <select
-                    value={singleCategory}
-                    onChange={(e) => setSingleCategory(e.target.value)}
-                    className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
-                        : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
-                    }`}
-                  >
-                    {PRODUCT_CATEGORY_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                  <div className="lg:col-span-1">
+                    <label
+                      className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
+                        darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
+                      }`}
+                    >
+                      <Calendar className="w-4 h-4" /> Date
+                    </label>
+                    <input
+                      type="date"
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                      className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all ${
+                        darkMode
+                          ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
+                          : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
+                      } min-w-[120px]`}
+                      required
+                    />
+                  </div>
 
-                {/* Time In */}
-                <div className="md:col-span-2 lg:col-span-2 xl:col-span-2">
-                  <label
-                    className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
-                    <Clock className="w-4 h-4" /> Time In
-                  </label>
-                  <div className="flex gap-3">
+                  <div className="md:col-span-2 lg:col-span-2 xl:col-span-2">
+                    <label
+                      className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
+                        darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
+                      }`}
+                    >
+                      <Package className="w-4 h-4" /> Category
+                    </label>
                     <select
-                      value={timeHour}
-                      onChange={(e) => setTimeHour(e.target.value)}
-                      className={`border rounded-lg px-3 py-2 flex-1 min-w-[72px] focus:outline-none focus:ring-2 transition-all ${
+                      value={singleCategory}
+                      onChange={(e) => setSingleCategory(e.target.value)}
+                      className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all ${
                         darkMode
                           ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
                           : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
                       }`}
                     >
-                      {Array.from({ length: 12 }, (_, i) => (
-                        <option key={i} value={i + 1}>
-                          {i + 1}
+                      {PRODUCT_CATEGORY_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
                         </option>
                       ))}
                     </select>
-                    <select
-                      value={timeMinute}
-                      onChange={(e) => setTimeMinute(e.target.value)}
-                      className={`border rounded-lg px-3 py-2 flex-1 min-w-[72px] focus:outline-none focus:ring-2 transition-all ${
-                        darkMode
-                          ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
-                          : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
+                  </div>
+
+                  <div className="md:col-span-2 lg:col-span-2 xl:col-span-2">
+                    <label
+                      className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
+                        darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
                       }`}
                     >
-                      {Array.from({ length: 60 }, (_, i) => {
-                        const val = i < 10 ? `0${i}` : `${i}`;
-                        return (
-                          <option key={i} value={val}>
-                            {val}
+                      <Clock className="w-4 h-4" /> Time In
+                    </label>
+                    <div className="flex gap-3">
+                      <select
+                        value={timeHour}
+                        onChange={(e) => setTimeHour(e.target.value)}
+                        className={`border rounded-lg px-3 py-2 flex-1 min-w-[72px] focus:outline-none focus:ring-2 transition-all ${
+                          darkMode
+                            ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
+                            : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
+                        }`}
+                      >
+                        {Array.from({ length: 12 }, (_, i) => (
+                          <option key={i} value={i + 1}>
+                            {i + 1}
                           </option>
-                        );
-                      })}
-                    </select>
-                    <select
-                      value={timeAMPM}
-                      onChange={(e) => setTimeAMPM(e.target.value)}
-                      className={`border rounded-lg px-3 py-2 w-[88px] min-w-[88px] shrink-0 focus:outline-none focus:ring-2 transition-all ${
-                        darkMode
-                          ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
-                          : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
-                      }`}
-                    >
-                      <option>AM</option>
-                      <option>PM</option>
-                    </select>
+                        ))}
+                      </select>
+                      <select
+                        value={timeMinute}
+                        onChange={(e) => setTimeMinute(e.target.value)}
+                        className={`border rounded-lg px-3 py-2 flex-1 min-w-[72px] focus:outline-none focus:ring-2 transition-all ${
+                          darkMode
+                            ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
+                            : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
+                        }`}
+                      >
+                        {Array.from({ length: 60 }, (_, i) => {
+                          const val = i < 10 ? `0${i}` : `${i}`;
+                          return (
+                            <option key={i} value={val}>
+                              {val}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      <select
+                        value={timeAMPM}
+                        onChange={(e) => setTimeAMPM(e.target.value)}
+                        className={`border rounded-lg px-3 py-2 w-[88px] min-w-[88px] shrink-0 focus:outline-none focus:ring-2 transition-all ${
+                          darkMode
+                            ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
+                            : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
+                        }`}
+                      >
+                        <option>AM</option>
+                        <option>PM</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowMultipleInput(true)}
-                  className={`px-6 py-2.5 rounded-lg font-medium transition-all duration-200 ${
-                    darkMode
-                      ? "bg-[#374151] text-[#D1D5DB] hover:bg-[#4B5563]"
-                      : "bg-[#E5E7EB] text-[#374151] hover:bg-[#D1D5DB]"
-                  }`}
-                >
-                  Multiple Product Input
-                </button>
-                <button
-                  type="submit"
-                  className="bg-[#1E3A8A] hover:bg-[#1D4ED8] text-white px-6 py-2.5 rounded-lg font-medium flex items-center gap-2 shadow-md transition-all duration-200 hover:shadow-lg"
-                >
-                  <Plus className="w-5 h-5" /> Add Product
-                </button>
-              </div>
-            </form>
-            )}
-
-            {/* Multiple Product Input */}
-            {showMultipleInput && (
-            <div
-              className={`p-6 rounded-xl shadow-lg mb-8 border transition animate__animated animate__fadeInUp animate__faster ${
-                darkMode
-                  ? "bg-[#1F2937] border-[#374151]"
-                  : "bg-white border-[#E5E7EB]"
-              }`}
-            >
-              <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
-                <div>
-                  <h2 className="text-lg font-semibold">
-                    Multiple Product Input
-                  </h2>
-                  <p
-                    className={`text-xs ${
-                      darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowMultipleInput(true)}
+                    className={`px-6 py-2.5 rounded-lg font-medium transition-all duration-200 ${
+                      darkMode
+                        ? "bg-[#374151] text-[#D1D5DB] hover:bg-[#4B5563]"
+                        : "bg-[#E5E7EB] text-[#374151] hover:bg-[#D1D5DB]"
                     }`}
                   >
-                    Add multiple products in one submission with per-row date and time.
-                  </p>
+                    Multiple Product Input
+                  </button>
+                  <button
+                    type="submit"
+                    className="bg-[#1E3A8A] hover:bg-[#1D4ED8] text-white px-6 py-2.5 rounded-lg font-medium flex items-center gap-2 shadow-md transition-all duration-200 hover:shadow-lg"
+                  >
+                    <Plus className="w-5 h-5" /> Add Product
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setShowMultipleInput(false)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    darkMode
-                      ? "bg-[#374151] text-[#D1D5DB] hover:bg-[#4B5563]"
-                      : "bg-[#E5E7EB] text-[#374151] hover:bg-[#D1D5DB]"
-                  }`}
-                >
-                  Back to Single Product
-                </button>
-              </div>
-
-              <MultipleProductInput
-                products={bulkProducts}
-                setProducts={setBulkProducts}
-                productSuggestions={productSuggestions}
-                items={items}
-                normalizeName={normalizeName}
-                computeComponentAvailability={computeComponentAvailability}
-                darkMode={darkMode}
-              />
-
-              <div className="flex justify-end mt-6">
-                <button
-                  type="button"
-                  onClick={handleAddMultipleItems}
-                  disabled={isBulkSubmitting}
-                  className={`px-6 py-2.5 rounded-lg font-medium flex items-center gap-2 shadow-md transition-all duration-200 hover:shadow-lg ${
-                    isBulkSubmitting
-                      ? darkMode
-                        ? "bg-[#374151] text-[#9CA3AF] cursor-not-allowed"
-                        : "bg-[#E5E7EB] text-[#6B7280] cursor-not-allowed"
-                      : "bg-[#1E3A8A] hover:bg-[#1D4ED8] text-white"
-                  }`}
-                >
-                  <Plus className="w-5 h-5" /> Add Multiple Products
-                </button>
-              </div>
-            </div>
+              </form>
             )}
 
-            {/* ── Product History Toggle (Admin only) ───────────────────── */}
+            {showMultipleInput && (
+              <div
+                className={`p-6 rounded-xl shadow-lg mb-8 border transition animate__animated animate__fadeInUp animate__faster ${
+                  darkMode
+                    ? "bg-[#1F2937] border-[#374151]"
+                    : "bg-white border-[#E5E7EB]"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
+                  <div>
+                    <h2 className="text-lg font-semibold">
+                      Multiple Product Input
+                    </h2>
+                    <p
+                      className={`text-xs ${
+                        darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"
+                      }`}
+                    >
+                      Add multiple products in one submission with per-row date
+                      and time.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowMultipleInput(false)}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                      darkMode
+                        ? "bg-[#374151] text-[#D1D5DB] hover:bg-[#4B5563]"
+                        : "bg-[#E5E7EB] text-[#374151] hover:bg-[#D1D5DB]"
+                    }`}
+                  >
+                    Back to Single Product
+                  </button>
+                </div>
+
+                <MultipleProductInput
+                  products={bulkProducts}
+                  setProducts={setBulkProducts}
+                  productSuggestions={productSuggestions}
+                  items={items}
+                  normalizeName={normalizeName}
+                  computeComponentAvailability={computeComponentAvailability}
+                  darkMode={darkMode}
+                />
+
+                <div className="flex justify-end mt-6">
+                  <button
+                    type="button"
+                    onClick={handleAddMultipleItems}
+                    disabled={isBulkSubmitting}
+                    className={`px-6 py-2.5 rounded-lg font-medium flex items-center gap-2 shadow-md transition-all duration-200 hover:shadow-lg ${
+                      isBulkSubmitting
+                        ? darkMode
+                          ? "bg-[#374151] text-[#9CA3AF] cursor-not-allowed"
+                          : "bg-[#E5E7EB] text-[#6B7280] cursor-not-allowed"
+                        : "bg-[#1E3A8A] hover:bg-[#1D4ED8] text-white"
+                    }`}
+                  >
+                    <Plus className="w-5 h-5" /> Add Multiple Products
+                  </button>
+                </div>
+              </div>
+            )}
+
             {isAdmin && (
               <div
                 className={`rounded-xl shadow-xl overflow-hidden border mb-4 ${
@@ -1460,389 +1469,380 @@ export default function ProductInPage() {
               </div>
             )}
 
-            {/* ── Product Table ──────────────────────────────────────────── */}
             {isAdmin && showProductHistory && (
-            <div
-              className={`rounded-xl shadow-xl overflow-hidden border transition animate__animated animate__fadeInUp animate__fast ${
-                darkMode
-                  ? "bg-[#1F2937] border-[#374151]"
-                  : "bg-white border-[#E5E7EB]"
-              }`}
-            >
-              <div className="overflow-x-auto">
-                {/* KEY FIX: removed table-fixed, set a wide min-width so
-                    the browser can size each column by its content */}
-                <table className="w-full min-w-[1100px] border-collapse">
-                  <thead
-                    className={`${
-                      darkMode
-                        ? "bg-[#111827] text-[#D1D5DB]"
-                        : "bg-[#F9FAFB] text-[#374151]"
-                    }`}
-                  >
-                    <tr>
-                      {TABLE_COLUMNS.map(({ label, thClass }) => (
-                        <th
-                          key={label}
-                          className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap ${thClass}`}
-                        >
-                          {label}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody
-                    className={
-                      darkMode ? "divide-[#374151]" : "divide-[#E5E7EB]"
-                    }
-                  >
-                    {currentItems.length === 0 ? (
+              <div
+                className={`rounded-xl shadow-xl overflow-hidden border transition animate__animated animate__fadeInUp animate__fast ${
+                  darkMode
+                    ? "bg-[#1F2937] border-[#374151]"
+                    : "bg-white border-[#E5E7EB]"
+                }`}
+              >
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[1100px] border-collapse">
+                    <thead
+                      className={`${
+                        darkMode
+                          ? "bg-[#111827] text-[#D1D5DB]"
+                          : "bg-[#F9FAFB] text-[#374151]"
+                      }`}
+                    >
                       <tr>
-                        <td
-                          colSpan={TABLE_COLUMNS.length}
-                          className={`text-center p-8 sm:p-12 ${
-                            darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"
-                          } animate__animated animate__fadeIn`}
-                        >
-                          <PackageCheck
-                            className={`w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 animate__animated animate__fadeIn ${
-                              darkMode ? "text-[#6B7280]" : "text-[#D1D5DB]"
-                            }`}
-                          />
-                          <p className="text-base sm:text-lg font-medium mb-1">
-                            No products added yet
-                          </p>
-                          <p className="text-xs sm:text-sm opacity-75">
-                            Add your first product using the form above
-                          </p>
-                        </td>
+                        {TABLE_COLUMNS.map(({ label, thClass }) => (
+                          <th
+                            key={label}
+                            className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide whitespace-nowrap ${thClass}`}
+                          >
+                            {label}
+                          </th>
+                        ))}
                       </tr>
-                    ) : (
-                      currentItems.map((item, index) => (
-                        <tr
-                          key={item.id}
-                          className={`border-t transition animate__animated animate__fadeIn animate__faster ${
-                            darkMode
-                              ? "border-[#374151] hover:bg-[#374151]/40"
-                              : "border-[#E5E7EB] hover:bg-[#F3F4F6]"
-                          }`}
-                          style={{ animationDelay: `${index * 0.03}s` }}
-                        >
-                          {/* PRODUCT CODE */}
-                          <td className="px-4 py-3 text-center align-middle text-xs sm:text-sm whitespace-nowrap w-[140px] min-w-[140px]">
-                            {buildProductCode(item)}
-                          </td>
-
-                          {/* PRODUCT NAME */}
-                          <td className="px-4 py-3 text-center align-middle font-semibold text-sm sm:text-base whitespace-nowrap w-[150px] min-w-[150px]">
-                            {item.product_name}
-                          </td>
-
-                          {/* SKU */}
-                          <td className="px-4 py-3 text-center align-middle text-xs sm:text-sm whitespace-nowrap w-[130px] min-w-[130px]">
-                            {buildSku(item)}
-                          </td>
-
-                          {/* DESCRIPTION */}
-                          <td className="px-4 py-3 align-middle text-xs sm:text-sm w-[320px] min-w-[280px]">
-                            {editingDescriptionId === item.id ? (
-                              <div className="flex flex-col gap-2">
-                                <textarea
-                                  value={editingDescriptionValue}
-                                  onChange={(e) =>
-                                    setEditingDescriptionValue(e.target.value)
-                                  }
-                                  rows={3}
-                                  className={`w-full rounded-lg p-2 text-xs sm:text-sm border ${
-                                    darkMode
-                                      ? "bg-[#111827] border-[#374151] text-white"
-                                      : "bg-white border-[#E5E7EB] text-black"
-                                  }`}
-                                  placeholder="Type a description..."
-                                />
-                                <div className="flex items-center gap-2">
-                                  <button
-                                    type="button"
-                                    disabled={isSavingDescription}
-                                    onClick={() =>
-                                      saveEditingDescription(item.id)
-                                    }
-                                    className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold ${
-                                      isSavingDescription
-                                        ? darkMode
-                                          ? "bg-[#374151] text-[#9CA3AF] cursor-not-allowed"
-                                          : "bg-[#E5E7EB] text-[#6B7280] cursor-not-allowed"
-                                        : "bg-[#16A34A] text-white hover:bg-[#15803D]"
-                                    }`}
-                                  >
-                                    <Check className="w-4 h-4" /> Save
-                                  </button>
-                                  <button
-                                    type="button"
-                                    disabled={isSavingDescription}
-                                    onClick={cancelEditingDescription}
-                                    className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold ${
-                                      darkMode
-                                        ? "bg-[#374151] text-[#D1D5DB] hover:bg-[#4B5563]"
-                                        : "bg-[#F3F4F6] text-[#374151] hover:bg-[#E5E7EB]"
-                                    }`}
-                                  >
-                                    <X className="w-4 h-4" /> Cancel
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="flex items-start gap-2">
-                                <button
-                                  type="button"
-                                  className={`flex-1 text-left leading-snug ${
-                                    (item.description || "").toString().trim()
-                                      ? "cursor-pointer"
-                                      : "cursor-default"
-                                  }`}
-                                  onClick={() => {
-                                    const text = (item.description || "")
-                                      .toString()
-                                      .trim();
-                                    if (!text) return;
-                                    toggleDescriptionExpanded(item.id);
-                                  }}
-                                  title={
-                                    expandedDescriptionIds.has(item.id)
-                                      ? "Click to collapse"
-                                      : "Click to expand"
-                                  }
-                                >
-                                  {(() => {
-                                    const raw = (item.description || "")
-                                      .toString()
-                                      .trim();
-                                    if (!raw) {
-                                      return (
-                                        <span
-                                          className={
-                                            darkMode
-                                              ? "text-gray-500"
-                                              : "text-gray-400"
-                                          }
-                                        >
-                                          No description
-                                        </span>
-                                      );
-                                    }
-
-                                    if (expandedDescriptionIds.has(item.id)) {
-                                      return (
-                                        <span className="whitespace-pre-wrap">
-                                          {raw}
-                                        </span>
-                                      );
-                                    }
-
-                                    const truncated = truncateText(
-                                      raw,
-                                      DESCRIPTION_TRUNCATE_LIMIT,
-                                    );
-                                    return (
-                                      <span>
-                                        {truncated.text}
-                                        {truncated.isTruncated ? (
-                                          <span
-                                            className={`ml-2 text-[11px] font-semibold ${
-                                              darkMode
-                                                ? "text-blue-300"
-                                                : "text-blue-600"
-                                            }`}
-                                          >
-                                            View more
-                                          </span>
-                                        ) : null}
-                                      </span>
-                                    );
-                                  })()}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => startEditingDescription(item)}
-                                  className={`p-2 rounded-lg border transition ${
-                                    darkMode
-                                      ? "border-[#374151] hover:bg-[#374151]/60"
-                                      : "border-[#E5E7EB] hover:bg-[#F3F4F6]"
-                                  }`}
-                                  title="Edit description"
-                                >
-                                  <PencilLine className="w-4 h-4" />
-                                </button>
-                              </div>
-                            )}
-                          </td>
-
-                          {/* QUANTITY */}
-                          <td className="px-4 py-3 text-center align-middle w-[100px] min-w-[100px]">
-                            <span
-                              className={`px-2 sm:px-3 py-1 rounded-lg font-bold text-xs sm:text-sm ${
-                                darkMode
-                                  ? "bg-[#22C55E]/20 text-[#22C55E] border border-[#22C55E]/30"
-                                  : "bg-[#DCFCE7] text-[#16A34A] border border-[#BBF7D0]"
+                    </thead>
+                    <tbody
+                      className={
+                        darkMode ? "divide-[#374151]" : "divide-[#E5E7EB]"
+                      }
+                    >
+                      {currentItems.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={TABLE_COLUMNS.length}
+                            className={`text-center p-8 sm:p-12 ${
+                              darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"
+                            } animate__animated animate__fadeIn`}
+                          >
+                            <PackageCheck
+                              className={`w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 animate__animated animate__fadeIn ${
+                                darkMode ? "text-[#6B7280]" : "text-[#D1D5DB]"
                               }`}
-                            >
-                              {item.quantity}
-                            </span>
-                          </td>
-
-                          {/* DATE */}
-                          <td className="px-4 py-3 whitespace-nowrap text-center align-middle text-xs sm:text-sm w-[120px] min-w-[120px]">
-                            {item.date}
-                          </td>
-
-                          {/* TIME IN */}
-                          <td className="px-4 py-3 whitespace-nowrap text-center align-middle text-xs sm:text-sm w-[110px] min-w-[110px]">
-                            <div className="flex items-center justify-center gap-1.5">
-                              <Clock size={13} />
-                              {formatTo12Hour(item.time_in)}
-                            </div>
-                          </td>
-
-                          {/* COMPONENTS */}
-                          <td className="px-4 py-3 text-center align-middle w-[180px] min-w-[150px]">
-                            {item.components.length > 0 ? (
-                              <div className="flex flex-wrap justify-center gap-1">
-                                {item.components.map((c, i) => (
-                                  <span
-                                    key={i}
-                                    className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                                      darkMode
-                                        ? "bg-blue-800 text-blue-100"
-                                        : "bg-blue-100 text-blue-800"
-                                    }`}
-                                  >
-                                    {c.quantity} - {c.name}
-                                  </span>
-                                ))}
-                              </div>
-                            ) : (
-                              <span
-                                className={
-                                  darkMode ? "text-gray-500" : "text-gray-400"
-                                }
-                              >
-                                —
-                              </span>
-                            )}
+                            />
+                            <p className="text-base sm:text-lg font-medium mb-1">
+                              No products added yet
+                            </p>
+                            <p className="text-xs sm:text-sm opacity-75">
+                              Add your first product using the form above
+                            </p>
                           </td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Pagination */}
-              {sortedHistoryItems.length > itemsPerPage && (
-                <div
-                  className={`flex items-center justify-between px-4 py-3 border-t ${
-                    darkMode ? "border-[#374151]" : "border-[#E5E7EB]"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`text-sm ${
-                        darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"
-                      }`}
-                    >
-                      Showing {indexOfFirstItem + 1} to{" "}
-                      {Math.min(indexOfLastItem, sortedHistoryItems.length)} of{" "}
-                      {sortedHistoryItems.length} entries
-                    </div>
-                    <select
-                      value={productHistorySort}
-                      onChange={(e) => {
-                        setProductHistorySort(e.target.value);
-                        setCurrentPage(1);
-                      }}
-                      className={`text-xs border rounded-lg px-2 py-1.5 ${
-                        darkMode
-                          ? "bg-[#111827] border-[#374151] text-white"
-                          : "bg-white border-[#D1D5DB] text-[#111827]"
-                      }`}
-                    >
-                      <option value="default">Default</option>
-                      <option value="newest">Newest to Oldest</option>
-                      <option value="oldest">Oldest to Newest</option>
-                    </select>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={goToPrevPage}
-                      disabled={currentPage === 1}
-                      className={`p-2 rounded-lg transition-all ${
-                        currentPage === 1
-                          ? darkMode
-                            ? "bg-[#374151] text-[#6B7280] cursor-not-allowed"
-                            : "bg-[#F3F4F6] text-[#9CA3AF] cursor-not-allowed"
-                          : darkMode
-                            ? "bg-[#374151] text-[#D1D5DB] hover:bg-[#4B5563]"
-                            : "bg-[#F3F4F6] text-[#374151] hover:bg-[#E5E7EB]"
-                      }`}
-                    >
-                      <ChevronLeft className="w-5 h-5" />
-                    </button>
-
-                    <div className="flex items-center gap-1">
-                      {getPageNumbers().map((pageNum, idx) =>
-                        pageNum === "..." ? (
-                          <span
-                            key={`ellipsis-${idx}`}
-                            className={`px-3 py-2 ${
-                              darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"
+                      ) : (
+                        currentItems.map((item, index) => (
+                          <tr
+                            key={item.id}
+                            className={`border-t transition animate__animated animate__fadeIn animate__faster ${
+                              darkMode
+                                ? "border-[#374151] hover:bg-[#374151]/40"
+                                : "border-[#E5E7EB] hover:bg-[#F3F4F6]"
                             }`}
+                            style={{ animationDelay: `${index * 0.03}s` }}
                           >
-                            ...
-                          </span>
-                        ) : (
-                          <button
-                            key={pageNum}
-                            onClick={() => paginate(pageNum)}
-                            className={`px-3 py-2 rounded-lg font-medium transition-all ${
-                              currentPage === pageNum
-                                ? "bg-[#1E40AF] text-white shadow-md"
-                                : darkMode
-                                  ? "bg-[#374151] text-[#D1D5DB] hover:bg-[#4B5563]"
-                                  : "bg-[#F3F4F6] text-[#374151] hover:bg-[#E5E7EB]"
-                            }`}
-                          >
-                            {pageNum}
-                          </button>
-                        ),
+                            <td className="px-4 py-3 text-center align-middle text-xs sm:text-sm whitespace-nowrap w-[140px] min-w-[140px]">
+                              {buildProductCode(item)}
+                            </td>
+
+                            <td className="px-4 py-3 text-center align-middle font-semibold text-sm sm:text-base whitespace-nowrap w-[150px] min-w-[150px]">
+                              {item.product_name}
+                            </td>
+
+                            <td className="px-4 py-3 text-center align-middle text-xs sm:text-sm whitespace-nowrap w-[130px] min-w-[130px]">
+                              {buildSku(item)}
+                            </td>
+
+                            <td className="px-4 py-3 align-middle text-xs sm:text-sm w-[320px] min-w-[280px]">
+                              {editingDescriptionId === item.id ? (
+                                <div className="flex flex-col gap-2">
+                                  <textarea
+                                    value={editingDescriptionValue}
+                                    onChange={(e) =>
+                                      setEditingDescriptionValue(e.target.value)
+                                    }
+                                    rows={3}
+                                    className={`w-full rounded-lg p-2 text-xs sm:text-sm border ${
+                                      darkMode
+                                        ? "bg-[#111827] border-[#374151] text-white"
+                                        : "bg-white border-[#E5E7EB] text-black"
+                                    }`}
+                                    placeholder="Type a description..."
+                                  />
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      disabled={isSavingDescription}
+                                      onClick={() =>
+                                        saveEditingDescription(item.id)
+                                      }
+                                      className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold ${
+                                        isSavingDescription
+                                          ? darkMode
+                                            ? "bg-[#374151] text-[#9CA3AF] cursor-not-allowed"
+                                            : "bg-[#E5E7EB] text-[#6B7280] cursor-not-allowed"
+                                          : "bg-[#16A34A] text-white hover:bg-[#15803D]"
+                                      }`}
+                                    >
+                                      <Check className="w-4 h-4" /> Save
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={isSavingDescription}
+                                      onClick={cancelEditingDescription}
+                                      className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold ${
+                                        darkMode
+                                          ? "bg-[#374151] text-[#D1D5DB] hover:bg-[#4B5563]"
+                                          : "bg-[#F3F4F6] text-[#374151] hover:bg-[#E5E7EB]"
+                                      }`}
+                                    >
+                                      <X className="w-4 h-4" /> Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex items-start gap-2">
+                                  <button
+                                    type="button"
+                                    className={`flex-1 text-left leading-snug ${
+                                      (item.description || "").toString().trim()
+                                        ? "cursor-pointer"
+                                        : "cursor-default"
+                                    }`}
+                                    onClick={() => {
+                                      const text = (item.description || "")
+                                        .toString()
+                                        .trim();
+                                      if (!text) return;
+                                      toggleDescriptionExpanded(item.id);
+                                    }}
+                                    title={
+                                      expandedDescriptionIds.has(item.id)
+                                        ? "Click to collapse"
+                                        : "Click to expand"
+                                    }
+                                  >
+                                    {(() => {
+                                      const raw = (item.description || "")
+                                        .toString()
+                                        .trim();
+                                      if (!raw) {
+                                        return (
+                                          <span
+                                            className={
+                                              darkMode
+                                                ? "text-gray-500"
+                                                : "text-gray-400"
+                                            }
+                                          >
+                                            No description
+                                          </span>
+                                        );
+                                      }
+
+                                      if (
+                                        expandedDescriptionIds.has(item.id)
+                                      ) {
+                                        return (
+                                          <span className="whitespace-pre-wrap">
+                                            {raw}
+                                          </span>
+                                        );
+                                      }
+
+                                      const truncated = truncateText(
+                                        raw,
+                                        DESCRIPTION_TRUNCATE_LIMIT,
+                                      );
+                                      return (
+                                        <span>
+                                          {truncated.text}
+                                          {truncated.isTruncated ? (
+                                            <span
+                                              className={`ml-2 text-[11px] font-semibold ${
+                                                darkMode
+                                                  ? "text-blue-300"
+                                                  : "text-blue-600"
+                                              }`}
+                                            >
+                                              View more
+                                            </span>
+                                          ) : null}
+                                        </span>
+                                      );
+                                    })()}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      startEditingDescription(item)
+                                    }
+                                    className={`p-2 rounded-lg border transition ${
+                                      darkMode
+                                        ? "border-[#374151] hover:bg-[#374151]/60"
+                                        : "border-[#E5E7EB] hover:bg-[#F3F4F6]"
+                                    }`}
+                                    title="Edit description"
+                                  >
+                                    <PencilLine className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+
+                            <td className="px-4 py-3 text-center align-middle w-[100px] min-w-[100px]">
+                              <span
+                                className={`px-2 sm:px-3 py-1 rounded-lg font-bold text-xs sm:text-sm ${
+                                  darkMode
+                                    ? "bg-[#22C55E]/20 text-[#22C55E] border border-[#22C55E]/30"
+                                    : "bg-[#DCFCE7] text-[#16A34A] border border-[#BBF7D0]"
+                                }`}
+                              >
+                                {item.quantity}
+                              </span>
+                            </td>
+
+                            <td className="px-4 py-3 whitespace-nowrap text-center align-middle text-xs sm:text-sm w-[120px] min-w-[120px]">
+                              {item.date}
+                            </td>
+
+                            <td className="px-4 py-3 whitespace-nowrap text-center align-middle text-xs sm:text-sm w-[110px] min-w-[110px]">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <Clock size={13} />
+                                {formatTo12Hour(item.time_in)}
+                              </div>
+                            </td>
+
+                            <td className="px-4 py-3 text-center align-middle w-[180px] min-w-[150px]">
+                              {item.components.length > 0 ? (
+                                <div className="flex flex-wrap justify-center gap-1">
+                                  {item.components.map((c, i) => (
+                                    <span
+                                      key={i}
+                                      className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                                        darkMode
+                                          ? "bg-blue-800 text-blue-100"
+                                          : "bg-blue-100 text-blue-800"
+                                      }`}
+                                    >
+                                      {c.quantity} - {c.name}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span
+                                  className={
+                                    darkMode ? "text-gray-500" : "text-gray-400"
+                                  }
+                                >
+                                  —
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))
                       )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {sortedHistoryItems.length > itemsPerPage && (
+                  <div
+                    className={`flex items-center justify-between px-4 py-3 border-t ${
+                      darkMode ? "border-[#374151]" : "border-[#E5E7EB]"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`text-sm ${
+                          darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"
+                        }`}
+                      >
+                        Showing {indexOfFirstItem + 1} to{" "}
+                        {Math.min(indexOfLastItem, sortedHistoryItems.length)} of{" "}
+                        {sortedHistoryItems.length} entries
+                      </div>
+                      <select
+                        value={productHistorySort}
+                        onChange={(e) => {
+                          setProductHistorySort(e.target.value);
+                          setCurrentPage(1);
+                        }}
+                        className={`text-xs border rounded-lg px-2 py-1.5 ${
+                          darkMode
+                            ? "bg-[#111827] border-[#374151] text-white"
+                            : "bg-white border-[#D1D5DB] text-[#111827]"
+                        }`}
+                      >
+                        <option value="default">Default</option>
+                        <option value="newest">Newest to Oldest</option>
+                        <option value="oldest">Oldest to Newest</option>
+                      </select>
                     </div>
 
-                    <button
-                      onClick={goToNextPage}
-                      disabled={currentPage === totalPages}
-                      className={`p-2 rounded-lg transition-all ${
-                        currentPage === totalPages
-                          ? darkMode
-                            ? "bg-[#374151] text-[#6B7280] cursor-not-allowed"
-                            : "bg-[#F3F4F6] text-[#9CA3AF] cursor-not-allowed"
-                          : darkMode
-                            ? "bg-[#374151] text-[#D1D5DB] hover:bg-[#4B5563]"
-                            : "bg-[#F3F4F6] text-[#374151] hover:bg-[#E5E7EB]"
-                      }`}
-                    >
-                      <ChevronRight className="w-5 h-5" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={goToPrevPage}
+                        disabled={currentPage === 1}
+                        className={`p-2 rounded-lg transition-all ${
+                          currentPage === 1
+                            ? darkMode
+                              ? "bg-[#374151] text-[#6B7280] cursor-not-allowed"
+                              : "bg-[#F3F4F6] text-[#9CA3AF] cursor-not-allowed"
+                            : darkMode
+                              ? "bg-[#374151] text-[#D1D5DB] hover:bg-[#4B5563]"
+                              : "bg-[#F3F4F6] text-[#374151] hover:bg-[#E5E7EB]"
+                        }`}
+                      >
+                        <ChevronLeft className="w-5 h-5" />
+                      </button>
+
+                      <div className="flex items-center gap-1">
+                        {getPageNumbers().map((pageNum, idx) =>
+                          pageNum === "..." ? (
+                            <span
+                              key={`ellipsis-${idx}`}
+                              className={`px-3 py-2 ${
+                                darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"
+                              }`}
+                            >
+                              ...
+                            </span>
+                          ) : (
+                            <button
+                              key={pageNum}
+                              onClick={() => paginate(pageNum)}
+                              className={`px-3 py-2 rounded-lg font-medium transition-all ${
+                                currentPage === pageNum
+                                  ? "bg-[#1E40AF] text-white shadow-md"
+                                  : darkMode
+                                    ? "bg-[#374151] text-[#D1D5DB] hover:bg-[#4B5563]"
+                                    : "bg-[#F3F4F6] text-[#374151] hover:bg-[#E5E7EB]"
+                              }`}
+                            >
+                              {pageNum}
+                            </button>
+                          ),
+                        )}
+                      </div>
+
+                      <button
+                        onClick={goToNextPage}
+                        disabled={currentPage === totalPages}
+                        className={`p-2 rounded-lg transition-all ${
+                          currentPage === totalPages
+                            ? darkMode
+                              ? "bg-[#374151] text-[#6B7280] cursor-not-allowed"
+                              : "bg-[#F3F4F6] text-[#9CA3AF] cursor-not-allowed"
+                            : darkMode
+                              ? "bg-[#374151] text-[#D1D5DB] hover:bg-[#4B5563]"
+                              : "bg-[#F3F4F6] text-[#374151] hover:bg-[#E5E7EB]"
+                        }`}
+                      >
+                        <ChevronRight className="w-5 h-5" />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
             )}
           </div>
         </main>
       </div>
 
-      {/* ── Modals ──────────────────────────────────────────────────────── */}
       <MissingComponentsModal
         show={showMissingComponentsModal}
         onClose={() => setShowMissingComponentsModal(false)}
