@@ -4,6 +4,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import AuthGuard from "../../components/AuthGuard";
+import { logActivity } from "../../utils/logActivity";
 import Sidebar from "../../components/Sidebar";
 import TopNavbar from "../../components/TopNavbar";
 import {
@@ -76,7 +77,7 @@ export default function AdminPanelPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [activeTab, setActiveTab] = useState("products-in");
-  const { role, loading, userEmail } = useAuth();
+  const { role, loading, userEmail, displayName } = useAuth();
   const router = useRouter();
   const isAdmin = isAdminRole(role);
 
@@ -240,21 +241,31 @@ export default function AdminPanelPage() {
   }, []);
 
   const handleRestoreFromHistory = async (entry) => {
-    if (!entry?.id) return;
-    setRestoringUndoId(entry.id);
-    const { error } = await restoreDeletedRecord(entry);
-    if (error) {
-      setFeedback({ type: "error", message: `Restore failed: ${error.message || "Unknown error"}` });
-      setRestoringUndoId(null);
-      return;
-    }
+  if (!entry?.id) return;
+  setRestoringUndoId(entry.id);
 
-    await removeAdminUndoRecord(entry.id);
-    await refreshUndoHistory();
-    await loadAllData();
-    setFeedback({ type: "success", message: "Record restored successfully." });
+  const { error } = await restoreDeletedRecord(entry);
+  if (error) {
+    setFeedback({ type: "error", message: `Restore failed: ${error.message || "Unknown error"}` });
     setRestoringUndoId(null);
-  };
+    return;
+  }
+
+  await logActivity({
+    userId: userEmail || null,
+    userName: displayName || userEmail || "Unknown User",
+    userType: role || "staff",
+    action: "RESTORE_RECORD",
+    module: "Admin CRUD Products",
+    details: `Restored ${entry.label || "record"} from ${getUndoTypeLabel(entry.tabKey)}`,
+  });
+
+  await removeAdminUndoRecord(entry.id);
+  await refreshUndoHistory();
+  await loadAllData();
+  setFeedback({ type: "success", message: "Record restored successfully." });
+  setRestoringUndoId(null);
+};
 
   const handleDebugUndoExpiry = async () => {
     setDebugExpiring(true);
@@ -524,74 +535,120 @@ export default function AdminPanelPage() {
   };
 
   const handleEditSave = async () => {
-    if (!editItem) return;
-    setEditSaving(true);
+  if (!editItem) return;
+  setEditSaving(true);
 
-    if (isUsersTab) {
-      const updates = {
-        name: editForm.name || null,
-        email: editForm.email || null,
-        role: (editForm.role || "staff").toLowerCase(),
-        status: (editForm.status || "pending").toLowerCase(),
-      };
+  if (isUsersTab) {
+    const updates = {
+      name: editForm.name || null,
+      email: editForm.email || null,
+      role: (editForm.role || "staff").toLowerCase(),
+      status: (editForm.status || "pending").toLowerCase(),
+    };
 
-      const { error } = await updateUserProfile(editItem.id, updates, editItem.__sourceTable);
-      if (error) {
-        setFeedback({ type: "error", message: `Update failed: ${error.message || "Unknown error"}` });
-        setEditSaving(false);
-        return;
-      }
+    const { error } = await updateUserProfile(
+      editItem.id,
+      updates,
+      editItem.__sourceTable
+    );
 
-      setFeedback({ type: "success", message: "User updated successfully." });
-      closeEdit();
-      await loadAllData();
-      return;
-    }
-
-    // Build the update payload — only include changed fields
-    const updates = {};
-    const fields = getFields();
-    for (const f of fields) {
-      const newVal = f.type === "number"
-        ? (editForm[f.key] === "" || editForm[f.key] === null ? null : Number(editForm[f.key]))
-        : (editForm[f.key] || null);
-      const oldVal = editItem[f.key] ?? null;
-      if (newVal !== oldVal) {
-        updates[f.key] = newVal;
-      }
-    }
-
-    if (Object.keys(updates).length === 0) {
-      closeEdit();
-      return;
-    }
-
-    let result;
-    switch (activeTab) {
-      case "products-in":
-        result = await updateProductInController(editItem.id, updates);
-        break;
-      case "products-out":
-        result = await updateProductOutController(editItem.id, updates);
-        break;
-      case "components-in":
-        result = await updateParcelInItem(editItem.id, updates);
-        break;
-      case "components-out":
-        result = await updateParcelOutItem(editItem.id, updates);
-        break;
-    }
-
-    if (result?.error) {
-      setFeedback({ type: "error", message: `Update failed: ${result.error.message || "Unknown error"}` });
+    if (error) {
+      setFeedback({
+        type: "error",
+        message: `Update failed: ${error.message || "Unknown error"}`,
+      });
       setEditSaving(false);
       return;
     }
 
-    setFeedback({ type: "success", message: "Record updated successfully." });
+    await logActivity({
+      userId: userEmail || null,
+      userName: displayName || userEmail || "Unknown User",
+      userType: role || "staff",
+      action: "UPDATE USER",
+      module: "Admin CRUD Products",
+      details: `Updated user ${editItem.name || editItem.email} -> name: ${updates.name}, role: ${updates.role}, status: ${updates.status}`,
+    });
+
+    setFeedback({ type: "success", message: "User updated successfully." });
     closeEdit();
     await loadAllData();
-  };
+    setEditSaving(false);
+    return;
+  }
+
+  const updates = {};
+  const fields = getFields();
+
+  for (const f of fields) {
+    const newVal =
+      f.type === "number"
+        ? editForm[f.key] === "" || editForm[f.key] === null
+          ? null
+          : Number(editForm[f.key])
+        : editForm[f.key] || null;
+
+    const oldVal = editItem[f.key] ?? null;
+
+    if (newVal !== oldVal) {
+      updates[f.key] = newVal;
+    }
+  }
+
+  if (Object.keys(updates).length === 0) {
+    closeEdit();
+    setEditSaving(false);
+    return;
+  }
+
+  let result;
+
+  switch (activeTab) {
+    case "products-in":
+      result = await updateProductInController(editItem.id, updates);
+      break;
+    case "products-out":
+      result = await updateProductOutController(editItem.id, updates);
+      break;
+    case "components-in":
+      result = await updateParcelInItem(editItem.id, updates);
+      break;
+    case "components-out":
+      result = await updateParcelOutItem(editItem.id, updates);
+      break;
+    default:
+      result = { error: { message: "Unknown tab" } };
+  }
+
+  if (result?.error) {
+    setFeedback({
+      type: "error",
+      message: `Update failed: ${result.error.message || "Unknown error"}`,
+    });
+    setEditSaving(false);
+    return;
+  }
+
+  const recordName =
+    editItem.product_name ||
+    editItem.item_name ||
+    editItem.name ||
+    `#${editItem.id}`;
+
+  await logActivity({
+    userId: userEmail || null,
+    userName: displayName || userEmail || "Unknown User",
+    userType: role || "staff",
+    action: "UPDATE RECORD",
+    module: "Admin CRUD Products",
+    details: `Updated ${recordName} in ${TAB_META[activeTab]?.label || activeTab}`,
+  });
+
+  setFeedback({ type: "success", message: "Record updated successfully." });
+  closeEdit();
+  await loadAllData();
+  setEditSaving(false);
+};
 
   // ---- DELETE ----
   const openDelete = (item) => {
@@ -604,59 +661,38 @@ export default function AdminPanelPage() {
   };
 
   const handleDeleteConfirm = async () => {
-    if (!deleteTarget) return;
-    setDeleting(true);
-    const undoSnapshot = buildDeleteSnapshot(deleteTarget, activeTab, isUsersTab);
+  if (!deleteTarget) return;
+  setDeleting(true);
 
-    if (isUsersTab) {
-      const { error } = await deleteUserProfile(deleteTarget.id, deleteTarget.__sourceTable);
-      if (error) {
-        setFeedback({ type: "error", message: `Delete failed: ${error.message || "Unknown error"}` });
-        setDeleting(false);
-        return;
-      }
+  const undoSnapshot = buildDeleteSnapshot(
+    deleteTarget,
+    activeTab,
+    isUsersTab
+  );
 
-      const undoSaveResult = await saveDeletedAdminRecord({
-        ...undoSnapshot,
-        deletedBy: userEmail || null,
+  if (isUsersTab) {
+    const { error } = await deleteUserProfile(
+      deleteTarget.id,
+      deleteTarget.__sourceTable
+    );
+
+    if (error) {
+      setFeedback({
+        type: "error",
+        message: `Delete failed: ${error.message || "Unknown error"}`,
       });
-
-      if (!undoSaveResult?.success) {
-        setFeedback({
-          type: "error",
-          message: `User deleted, but undo archive failed: ${undoSaveResult?.error?.message || "Unknown error"}`,
-        });
-      } else {
-        setFeedback({ type: "success", message: "User deleted from profile list." });
-      }
-
-      await refreshUndoHistory();
-      closeDelete();
-      await loadAllData();
-      return;
-    }
-
-    let result;
-    switch (activeTab) {
-      case "products-in":
-        result = await deleteProductInController(deleteTarget.id);
-        break;
-      case "products-out":
-        result = await deleteProductOutController(deleteTarget.id);
-        break;
-      case "components-in":
-        result = await deleteParcelInItem(deleteTarget.id);
-        break;
-      case "components-out":
-        result = await deleteParcelOutItem(deleteTarget.id);
-        break;
-    }
-
-    if (result?.error) {
-      setFeedback({ type: "error", message: `Delete failed: ${result.error.message || "Unknown error"}` });
       setDeleting(false);
       return;
     }
+
+    await logActivity({
+      userId: userEmail || null,
+      userName: displayName || userEmail || "Unknown User",
+      userType: role || "staff",
+      action: "DELETE USER",
+      module: "Admin CRUD Products",
+      details: `Deleted user ${deleteTarget.name || deleteTarget.email}`,
+    });
 
     const undoSaveResult = await saveDeletedAdminRecord({
       ...undoSnapshot,
@@ -666,16 +702,84 @@ export default function AdminPanelPage() {
     if (!undoSaveResult?.success) {
       setFeedback({
         type: "error",
-        message: `Record deleted, but undo archive failed: ${undoSaveResult?.error?.message || "Unknown error"}`,
+        message: `User deleted, but undo archive failed: ${undoSaveResult?.error?.message || "Unknown error"}`,
       });
     } else {
-      setFeedback({ type: "success", message: "Record deleted." });
+      setFeedback({
+        type: "success",
+        message: "User deleted from profile list.",
+      });
     }
 
     await refreshUndoHistory();
     closeDelete();
     await loadAllData();
+    setDeleting(false);
+    return;
   };
+
+  let result;
+
+  switch (activeTab) {
+    case "products-in":
+      result = await deleteProductInController(deleteTarget.id);
+      break;
+    case "products-out":
+      result = await deleteProductOutController(deleteTarget.id);
+      break;
+    case "components-in":
+      result = await deleteParcelInItem(deleteTarget.id);
+      break;
+    case "components-out":
+      result = await deleteParcelOutItem(deleteTarget.id);
+      break;
+    default:
+      result = { error: { message: "Unknown tab" } };
+  }
+
+  if (result?.error) {
+    setFeedback({
+      type: "error",
+      message: `Delete failed: ${result.error.message || "Unknown error"}`,
+    });
+    setDeleting(false);
+    return;
+  }
+
+  const recordName =
+    deleteTarget.product_name ||
+    deleteTarget.item_name ||
+    deleteTarget.name ||
+    `#${deleteTarget.id}`;
+
+  await logActivity({
+    userId: userEmail || null,
+    userName: displayName || userEmail || "Unknown User",
+    userType: role || "staff",
+    action: "DELETE RECORD",
+    module: "Admin CRUD Products",
+    details: `Deleted ${recordName} from ${TAB_META[activeTab]?.label || activeTab}`,
+  });
+
+  const undoSaveResult = await saveDeletedAdminRecord({
+    ...undoSnapshot,
+    deletedBy: userEmail || null,
+  });
+
+  if (!undoSaveResult?.success) {
+    setFeedback({
+      type: "error",
+      message: `Record deleted, but undo archive failed: ${undoSaveResult?.error?.message || "Unknown error"}`,
+    });
+  } else {
+    setFeedback({ type: "success", message: "Record deleted." });
+  }
+
+  await refreshUndoHistory();
+  closeDelete();
+  await loadAllData();
+  setDeleting(false);
+};
 
   // ---- STYLE HELPERS ----
   const cardClass = (extra = "") =>

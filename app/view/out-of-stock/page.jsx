@@ -492,7 +492,7 @@ export default function Page() {
         userId: userEmail || null,
         userName: displayName || userEmail || "Unknown User",
         userType: role || "staff",
-        action: "UPDATE_CATEGORY",
+        action: "UPDATE CATEGORY",
         module: "Inventory",
         details: `Changed parcel category to ${categoryValue}`,
       });
