@@ -65,6 +65,7 @@ const buildDefaultForm = () => {
     quantity: 1,
     date: getToday(),
     remark: REMARK_OPTIONS[0],
+    receiver: "",
   };
 };
 
@@ -141,7 +142,8 @@ export default function StockTransferPage() {
         (record.purpose || "").toLowerCase().includes(keyword) ||
         (record.type || "").toLowerCase().includes(keyword) ||
         (record.category || "").toLowerCase().includes(keyword) ||
-        (record.remark || "").toLowerCase().includes(keyword)
+        (record.remark || "").toLowerCase().includes(keyword) ||
+        (record.receiver || "").toLowerCase().includes(keyword)
       );
     });
   }, [records, searchTerm, selectedMonth]);
@@ -193,6 +195,7 @@ export default function StockTransferPage() {
     if (!row.date) return "Date is required.";
     if (Number(row.quantity || 0) <= 0) return "Quantity must be greater than 0.";
     if (!row.remark) return "Remark is required.";
+    if (!(row.receiver || "").trim()) return "Receiver is required.";
     return "";
   };
 
@@ -215,6 +218,7 @@ export default function StockTransferPage() {
       quantity: Number(form.quantity || 1),
       date: form.date,
       remark: form.remark,
+      receiver: (form.receiver || "").trim(),
     };
 
     if (editingId) {
@@ -253,6 +257,7 @@ export default function StockTransferPage() {
       quantity: Number(record.quantity || 1),
       date: record.date || getToday(),
       remark: record.remark || REMARK_OPTIONS[0],
+      receiver: record.receiver || "",
     });
     setShowMultipleInput(false);
     setError("");
@@ -336,6 +341,7 @@ export default function StockTransferPage() {
         quantity: Number(row.quantity || 1),
         date: row.date,
         remark: row.remark,
+        receiver: (row.receiver || "").trim(),
       });
     });
 
@@ -453,7 +459,7 @@ export default function StockTransferPage() {
             {!showMultipleInput && (
               <form
                 onSubmit={handleAddOrEditRecord}
-                className={`p-6 rounded-xl shadow-lg mb-8 border transition animate__animated animate__fadeInUp animate__faster ${
+                className={`p-7 rounded-xl shadow-lg mb-8 border transition animate__animated animate__fadeInUp animate__faster ${
                   darkMode
                     ? "bg-[#1F2937] border-[#374151]"
                     : "bg-white border-[#E5E7EB]"
@@ -483,8 +489,8 @@ export default function StockTransferPage() {
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 xl:grid-cols-8 gap-2.5 mb-4">
-                  <div className="lg:col-span-2 xl:col-span-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-3.5 mb-4">
+                  <div className="lg:col-span-3">
                     <label
                       className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
                         darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
@@ -506,7 +512,7 @@ export default function StockTransferPage() {
                     />
                   </div>
 
-                  <div className="lg:col-span-2 xl:col-span-2">
+                  <div className="lg:col-span-3">
                     <label
                       className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
                         darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
@@ -527,7 +533,7 @@ export default function StockTransferPage() {
                     />
                   </div>
 
-                  <div className="lg:col-span-1">
+                  <div className="lg:col-span-2">
                     <label
                       className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
                         darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
@@ -553,7 +559,7 @@ export default function StockTransferPage() {
                     </select>
                   </div>
 
-                  <div className="lg:col-span-1">
+                  <div className="lg:col-span-2">
                     <label
                       className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
                         darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
@@ -575,7 +581,7 @@ export default function StockTransferPage() {
                     />
                   </div>
 
-                  <div className="lg:col-span-1">
+                  <div className="lg:col-span-2">
                     <label
                       className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
                         darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
@@ -596,7 +602,7 @@ export default function StockTransferPage() {
                     />
                   </div>
 
-                  <div className="md:col-span-2 lg:col-span-2 xl:col-span-2">
+                  <div className="md:col-span-2 lg:col-span-4">
                     <label
                       className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
                         darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
@@ -622,7 +628,7 @@ export default function StockTransferPage() {
                     </select>
                   </div>
 
-                  <div className="md:col-span-2 lg:col-span-2 xl:col-span-2">
+                  <div className="md:col-span-2 lg:col-span-4">
                     <label
                       className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
                         darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
@@ -646,6 +652,28 @@ export default function StockTransferPage() {
                         </option>
                       ))}
                     </select>
+                  </div>
+
+                  <div className="md:col-span-2 lg:col-span-4">
+                    <label
+                      className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
+                        darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
+                      }`}
+                    >
+                      <Package className="w-4 h-4" /> Receiver
+                    </label>
+                    <input
+                      type="text"
+                      value={form.receiver}
+                      onChange={(e) => onFormChange("receiver", e.target.value)}
+                      placeholder="Receiver name"
+                      className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all ${
+                        darkMode
+                          ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
+                          : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
+                      }`}
+                      required
+                    />
                   </div>
                 </div>
 
@@ -777,7 +805,7 @@ export default function StockTransferPage() {
                         )}
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-3">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-8 gap-3.5">
                         <input
                           type="text"
                           placeholder="Item Name"
@@ -880,6 +908,20 @@ export default function StockTransferPage() {
                             </option>
                           ))}
                         </select>
+
+                        <input
+                          type="text"
+                          placeholder="Receiver"
+                          value={row.receiver || ""}
+                          onChange={(e) =>
+                            updateBulkRow(index, "receiver", e.target.value)
+                          }
+                          className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all ${
+                            darkMode
+                              ? "border-[#374151] focus:ring-[#3B82F6] bg-[#1F2937] text-white"
+                              : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
+                          }`}
+                        />
                       </div>
                     </div>
                   ))}
@@ -969,14 +1011,14 @@ export default function StockTransferPage() {
                   >
                     <tr>
                       {[
-                        "ACTION",
                         "ITEM NAME",
-                        "TYPE",
                         "PURPOSE",
                         "QUANTITY",
                         "DATE",
-                        "CATEGORY",
+                        "TYPE / CATEGORY",
                         "REMARK",
+                        "RECEIVER",
+                        "ACTION",
                       ].map((head) => (
                         <th
                           key={head}
@@ -1022,6 +1064,56 @@ export default function StockTransferPage() {
                           }`}
                           style={{ animationDelay: `${index * 0.03}s` }}
                         >
+                          <td className="px-4 py-3 text-center align-middle font-semibold text-sm whitespace-nowrap">
+                            {record.itemName}
+                          </td>
+                          <td className="px-4 py-3 align-middle text-xs sm:text-sm">
+                            {(record.purpose || "").trim() || "-"}
+                          </td>
+                          <td className="px-4 py-3 text-center align-middle">
+                            <span
+                              className={`px-2 sm:px-3 py-1 rounded-lg font-bold text-xs sm:text-sm ${
+                                darkMode
+                                  ? "bg-[#22C55E]/20 text-[#22C55E] border border-[#22C55E]/30"
+                                  : "bg-[#DCFCE7] text-[#16A34A] border border-[#BBF7D0]"
+                              }`}
+                            >
+                              {record.quantity}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-center align-middle text-xs sm:text-sm">
+                            {record.date}
+                          </td>
+
+                          <td className="px-4 py-3 text-center align-middle">
+                            <div className="flex flex-col items-center gap-2">
+                              <span
+                                className={`text-[11px] uppercase tracking-wide font-semibold ${
+                                  darkMode ? "text-[#E5E7EB]" : "text-[#1F2937]"
+                                }`}
+                              >
+                                {record.type}
+                              </span>
+                              <span
+                                className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border ${
+                                  darkMode
+                                    ? "bg-[#111827] border-[#374151] text-[#D1D5DB]"
+                                    : "bg-[#FEF3C7] border-[#FCD34D] text-[#92400E]"
+                                }`}
+                              >
+                                {record.category}
+                              </span>
+                            </div>
+                          </td>
+
+                          <td className="px-4 py-3 whitespace-nowrap text-center align-middle text-xs sm:text-sm font-semibold">
+                            {record.remark}
+                          </td>
+
+                          <td className="px-4 py-3 whitespace-nowrap text-center align-middle text-xs sm:text-sm">
+                            {(record.receiver || "").trim() || "-"}
+                          </td>
+
                           <td className="px-4 py-3 text-center align-middle">
                             <div className="flex items-center justify-center gap-2">
                               <button
@@ -1052,36 +1144,6 @@ export default function StockTransferPage() {
                                 </button>
                               )}
                             </div>
-                          </td>
-
-                          <td className="px-4 py-3 text-center align-middle font-semibold text-sm whitespace-nowrap">
-                            {record.itemName}
-                          </td>
-                          <td className="px-4 py-3 text-center align-middle text-xs sm:text-sm whitespace-nowrap">
-                            {record.type}
-                          </td>
-                          <td className="px-4 py-3 align-middle text-xs sm:text-sm">
-                            {(record.purpose || "").trim() || "-"}
-                          </td>
-                          <td className="px-4 py-3 text-center align-middle">
-                            <span
-                              className={`px-2 sm:px-3 py-1 rounded-lg font-bold text-xs sm:text-sm ${
-                                darkMode
-                                  ? "bg-[#22C55E]/20 text-[#22C55E] border border-[#22C55E]/30"
-                                  : "bg-[#DCFCE7] text-[#16A34A] border border-[#BBF7D0]"
-                              }`}
-                            >
-                              {record.quantity}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-center align-middle text-xs sm:text-sm">
-                            {record.date}
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-center align-middle text-xs sm:text-sm">
-                            {record.category}
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-center align-middle text-xs sm:text-sm font-semibold">
-                            {record.remark}
                           </td>
                         </tr>
                       ))
