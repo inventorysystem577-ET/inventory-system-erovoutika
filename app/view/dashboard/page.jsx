@@ -311,7 +311,9 @@ export default function page() {
             {/* Summary Cards - Stock In / Stock Out */}
             <div
               className={`grid gap-4 sm:gap-6 mb-8 ${
-                isAdmin ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-2" : "grid-cols-1"
+                isAdmin
+                  ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
+                  : "grid-cols-1 sm:grid-cols-2"
               }`}
             >
               <DashboardSummaryCard
@@ -324,17 +326,41 @@ export default function page() {
                 subtitle="Items in stock"
               />
 
+              <DashboardSummaryCard
+                onClick={() => handleCardClick("/view/product-in")}
+                containerClassName="bg-gradient-to-br from-[#1e40af] to-[#1e3a8a]"
+                Icon={Boxes}
+                MetaIcon={Clock}
+                title="Product In"
+                value={productInCount}
+                subtitle="Products in stock"
+                animationDelay="0.05s"
+              />
+
               {isAdmin && (
-                <DashboardSummaryCard
-                  onClick={() => handleCardClick("/view/parcel-delivery")}
-                  containerClassName="bg-gradient-to-br from-[#ea580c] to-[#c2410c]"
-                  Icon={PackageOpen}
-                  MetaIcon={TrendingDown}
-                  title="Stock Out"
-                  value={parcelDeliveryCount}
-                  subtitle="Items delivered"
-                  animationDelay="0.1s"
-                />
+                <>
+                  <DashboardSummaryCard
+                    onClick={() => handleCardClick("/view/parcel-delivery")}
+                    containerClassName="bg-gradient-to-br from-[#ea580c] to-[#c2410c]"
+                    Icon={PackageOpen}
+                    MetaIcon={TrendingDown}
+                    title="Stock Out"
+                    value={parcelDeliveryCount}
+                    subtitle="Items delivered"
+                    animationDelay="0.1s"
+                  />
+
+                  <DashboardSummaryCard
+                    onClick={() => handleCardClick("/view/product-out")}
+                    containerClassName="bg-gradient-to-br from-[#ea580c] to-[#c2410c]"
+                    Icon={Package}
+                    MetaIcon={TrendingDown}
+                    title="Product Out"
+                    value={productOutCount}
+                    subtitle="Products released"
+                    animationDelay="0.15s"
+                  />
+                </>
               )}
             </div>
 
