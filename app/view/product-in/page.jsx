@@ -1361,7 +1361,6 @@ export default function ProductInPage() {
                   </div>
                 </div>
 
-<<<<<<< HEAD
                 <div className="flex justify-end gap-2">
                   <button
                     type="button"
@@ -1370,43 +1369,6 @@ export default function ProductInPage() {
                       darkMode
                         ? "bg-[#374151] text-[#D1D5DB] hover:bg-[#4B5563]"
                         : "bg-[#E5E7EB] text-[#374151] hover:bg-[#D1D5DB]"
-=======
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowMultipleInput(true)}
-                  className="px-6 py-2.5 rounded-lg font-medium transition-all duration-200 bg-[#38b559] text-white hover:bg-[#42d469] flex items-center gap-2 shadow-md hover:shadow-lg"
-                >
-                <Plus className="w-5 h-5" />  Multiple Product Input
-                </button>
-                <button
-                  type="submit"
-                  className="bg-[#1E3A8A] hover:bg-[#1D4ED8] text-white px-6 py-2.5 rounded-lg font-medium flex items-center gap-2 shadow-md transition-all duration-200 hover:shadow-lg"
-                >
-                  <Plus className="w-5 h-5" /> Add Product
-                </button>
-              </div>
-            </form>
-            )}
-
-            {/* Multiple Product Input */}
-            {showMultipleInput && (
-            <div
-              className={`p-6 rounded-xl shadow-lg mb-8 border transition animate__animated animate__fadeInUp animate__faster ${
-                darkMode
-                  ? "bg-[#1F2937] border-[#374151]"
-                  : "bg-white border-[#E5E7EB]"
-              }`}
-            >
-              <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
-                <div>
-                  <h2 className="text-lg font-semibold">
-                    Multiple Product Input
-                  </h2>
-                  <p
-                    className={`text-xs ${
-                      darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"
->>>>>>> f042e89a2ac433f3e67964abc8916d1526222046
                     }`}
                   >
                     Multiple Product Input
@@ -1418,7 +1380,6 @@ export default function ProductInPage() {
                     <Plus className="w-5 h-5" /> Add Product
                   </button>
                 </div>
-<<<<<<< HEAD
               </form>
             )}
 
@@ -1484,44 +1445,6 @@ export default function ProductInPage() {
                   </button>
                 </div>
               </div>
-=======
-                <button
-                  type="button"
-                  onClick={() => setShowMultipleInput(false)}
-                  className="px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-[#38b559] text-white hover:bg-[#42d469] shadow-sm hover:shadow-md"
-                >
-                  Back to Single Product
-                </button>
-              </div>
-
-              <MultipleProductInput
-                products={bulkProducts}
-                setProducts={setBulkProducts}
-                productSuggestions={productSuggestions}
-                items={items}
-                normalizeName={normalizeName}
-                computeComponentAvailability={computeComponentAvailability}
-                darkMode={darkMode}
-              />
-
-              <div className="flex justify-end mt-6">
-                <button
-                  type="button"
-                  onClick={handleAddMultipleItems}
-                  disabled={isBulkSubmitting}
-                  className={`px-6 py-2.5 rounded-lg font-medium flex items-center gap-2 shadow-md transition-all duration-200 hover:shadow-lg ${
-                    isBulkSubmitting
-                      ? darkMode
-                        ? "bg-[#374151] text-[#9CA3AF] cursor-not-allowed"
-                        : "bg-[#E5E7EB] text-[#6B7280] cursor-not-allowed"
-                      : "bg-[#1E3A8A] hover:bg-[#1D4ED8] text-white"
-                  }`}
-                >
-                  <Plus className="w-5 h-5" /> Add Multiple Products
-                </button>
-              </div>
-            </div>
->>>>>>> f042e89a2ac433f3e67964abc8916d1526222046
             )}
 
             {isAdmin && (
