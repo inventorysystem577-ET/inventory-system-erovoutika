@@ -6,6 +6,7 @@ import TopNavbar from "../../components/TopNavbar";
 import Sidebar from "../../components/Sidebar";
 import TransferFormRow from "../../components/TransferFormRow";
 import TransferRecordsTable from "../../components/TransferRecordsTable";
+import { logActivity } from "../../utils/logActivity";
 import {
   PackageCheck,
   Plus,
@@ -89,7 +90,7 @@ export default function StockTransferPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
-  const { role } = useAuth();
+  const { role, displayName, userEmail } = useAuth();
   const isAdmin = isAdminRole(role);
 
   useEffect(() => {
@@ -206,7 +207,7 @@ export default function StockTransferPage() {
     return "";
   };
 
-  const handleAddOrEditRecord = (e) => {
+  const handleAddOrEditRecord = async (e) => {
     e.preventDefault();
     setError("");
     setMessage("");
@@ -234,6 +235,16 @@ export default function StockTransferPage() {
           record.id === editingId ? { ...record, ...cleanRecord } : record,
         ),
       );
+
+      await logActivity({
+        userId: userEmail || null,
+        userName: displayName || userEmail || "Unknown User",
+        userType: role || "staff",
+        action: "UPDATE TRANSFER",
+        module: "Item Transfer",
+        details: `Updated ${cleanRecord.quantity}x ${cleanRecord.itemName}`,
+      });
+
       setMessage("Record updated.");
       resetForm();
       return;
@@ -249,6 +260,16 @@ export default function StockTransferPage() {
     };
 
     setRecords((prev) => [newRecord, ...prev]);
+
+    await logActivity({
+      userId: userEmail || null,
+      userName: displayName || userEmail || "Unknown User",
+      userType: role || "staff",
+      action: "CREATE TRANSFER",
+      module: "Item Transfer",
+      details: `Transferred ${cleanRecord.quantity}x ${cleanRecord.itemName} (${cleanRecord.type} → ${cleanRecord.category})`,
+    });
+
     setMessage("Record added.");
     resetForm();
   };
@@ -271,13 +292,24 @@ export default function StockTransferPage() {
     setMessage("");
   };
 
-  const handleDeleteRecord = (recordId) => {
+  const handleDeleteRecord = async (recordId) => {
     if (!isAdmin) return;
 
     const confirmed = window.confirm("Delete this item transfer record?");
     if (!confirmed) return;
 
+    const deletedRecord = records.find((r) => r.id === recordId);
+
     setRecords((prev) => prev.filter((record) => record.id !== recordId));
+
+    await logActivity({
+      userId: userEmail || null,
+      userName: displayName || userEmail || "Unknown User",
+      userType: role || "staff",
+      action: "DELETE TRANSFER",
+      module: "Item Transfer",
+      details: `Deleted ${deletedRecord?.quantity || ""}x ${deletedRecord?.itemName || ""}`,
+    });
 
     if (editingId === recordId) {
       resetForm();
@@ -315,7 +347,7 @@ export default function StockTransferPage() {
     setBulkRows((prev) => prev.filter((_, index) => index !== indexToRemove));
   };
 
-  const handleAddBulkRecords = (e) => {
+  const handleAddBulkRecords = async (e) => {
     e.preventDefault();
     setError("");
     setMessage("");
@@ -358,6 +390,16 @@ export default function StockTransferPage() {
     }
 
     setRecords((prev) => [...newRecords, ...prev]);
+
+    await logActivity({
+      userId: userEmail || null,
+      userName: displayName || userEmail || "Unknown User",
+      userType: role || "staff",
+      action: "CREATE TRANSFER BULK",
+      module: "Item Transfer",
+      details: newRecords.map((r) => `${r.quantity}x ${r.itemName}`).join(", "),
+    });
+
     setBulkRows([buildDefaultBulkRow()]);
     setMessage("Multiple records added.");
   };
@@ -481,8 +523,8 @@ export default function StockTransferPage() {
                     }}
                     className="px-6 py-2.5 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 bg-[#38b559] text-white hover:bg-[#42d469] shadow-md hover:shadow-lg"
                   >
-                  <Plus className="w-5 h-5" />
-                  Add Multiple Item Input
+                    <Plus className="w-5 h-5" />
+                    Add Multiple Item Input
                   </button>
 
                   {editingId && (
