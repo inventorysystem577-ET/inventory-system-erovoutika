@@ -1,23 +1,27 @@
 import {
   Activity,
   ArrowDownToLine,
+  ArrowLeftRight,
   ArrowUpFromLine,
   BarChart3,
   Package,
   PackageOpen,
   Settings,
   ShieldCheck,
+  AlertTriangle,
 } from "lucide-react";
 
 export const SIDEBAR_ICON_MAP = {
   Activity,
   ArrowDownToLine,
+  ArrowLeftRight,
   ArrowUpFromLine,
   BarChart3,
   Package,
   PackageOpen,
   Settings,
   ShieldCheck,
+  AlertTriangle,
 };
 
 export const SIDEBAR_ICON_OPTIONS = Object.keys(SIDEBAR_ICON_MAP).sort((a, b) =>
@@ -36,6 +40,12 @@ export const DEFAULT_ADMIN_SIDEBAR_ITEMS = [
     label: "Product In",
     iconKey: "ArrowDownToLine",
     path: "/view/product-in",
+  },
+  {
+    id: "Item Transfer",
+    label: "Item Transfer",
+    iconKey: "ArrowLeftRight",
+    path: "/view/item-transfer",
   },
   {
     id: "Product Out",
@@ -61,6 +71,12 @@ export const DEFAULT_ADMIN_SIDEBAR_ITEMS = [
     iconKey: "Activity",
     path: "/view/out-of-stock",
   },
+  {
+    id: "Defective Items",
+    label: "Defective Items",
+    iconKey: "AlertTriangle",
+    path: "/view/defective-items",
+  },
 ];
 
 export const DEFAULT_STAFF_SIDEBAR_ITEMS = [
@@ -69,6 +85,18 @@ export const DEFAULT_STAFF_SIDEBAR_ITEMS = [
     label: "Monitoring and Adding",
     iconKey: "ArrowDownToLine",
     path: "/view/product-in",
+  },
+  {
+    id: "Item Transfer",
+    label: "Item Transfer",
+    iconKey: "ArrowLeftRight",
+    path: "/view/item-transfer",
+  },
+    {
+    id: "Defective Items",
+    label: "Defective Items",
+    iconKey: "AlertTriangle",
+    path: "/view/defective-items",
   },
 ];
 
