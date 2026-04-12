@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Pencil, Search, Trash2, Users, XCircle } from "lucide-react";
 import AuthGuard from "../../components/AuthGuard";
+import { logActivity } from "../../utils/logActivity";
 import Sidebar from "../../components/Sidebar";
 import TopNavbar from "../../components/TopNavbar";
 import { useAuth } from "../../hook/useAuth";
@@ -38,7 +39,7 @@ export default function UserManagementPage() {
   const [deletingUser, setDeletingUser] = useState(null);
   const [deletePending, setDeletePending] = useState(false);
 
-  const { role, loading: authLoading, userEmail } = useAuth();
+  const { role, loading: authLoading, userEmail, displayName } = useAuth();
   const router  = useRouter();
   const isAdmin = isAdminRole(role);
 
@@ -81,24 +82,44 @@ export default function UserManagementPage() {
 
   // ── Approve / Deny (pending tab) ──────────────────────────
   const approveUser = async (user) => {
-    try {
-      await handleApproveRequest(user.id, "approve", userEmail);
-      setFeedback({ type: "success", message: `${user.name} approved successfully.` });
-      await loadUsers();
-    } catch (err) {
-      setFeedback({ type: "error", message: err.message });
-    }
-  };
+  try {
+    await handleApproveRequest(user.id, "approve", userEmail);
+
+    await logActivity({
+      userId: userEmail || null,
+      userName: displayName || userEmail || "Unknown User",
+      userType: role || "staff",
+      action: "APPROVE USER",
+      module: "User Management",
+      details: `Approved user ${user.name} (${user.email})`,
+    });
+
+    setFeedback({ type: "success", message: `${user.name} approved successfully.` });
+    await loadUsers();
+  } catch (err) {
+    setFeedback({ type: "error", message: err.message });
+  }
+};
 
   const denyUser = async (user) => {
-    try {
-      await handleApproveRequest(user.id, "reject", userEmail);
-      setFeedback({ type: "success", message: `${user.name} has been denied.` });
-      await loadUsers();
-    } catch (err) {
-      setFeedback({ type: "error", message: err.message });
-    }
-  };
+  try {
+    await handleApproveRequest(user.id, "reject", userEmail);
+
+    await logActivity({
+      userId: userEmail || null,
+      userName: displayName || userEmail || "Unknown User",
+      userType: role || "staff",
+      action: "DENY USER",
+      module: "User Management",
+      details: `Denied user ${user.name} (${user.email})`,
+    });
+
+    setFeedback({ type: "success", message: `${user.name} has been denied.` });
+    await loadUsers();
+  } catch (err) {
+    setFeedback({ type: "error", message: err.message });
+  }
+};
 
   // ── Edit (approved tab) ───────────────────────────────────
   const openEdit = (user) => {
@@ -108,37 +129,62 @@ export default function UserManagementPage() {
   const closeEdit = () => { setEditingUser(null); setEditForm({ name: "", role: "" }); };
 
   const submitEdit = async () => {
-    if (!editForm.name.trim() || !editForm.role) return;
-    setEditPending(true);
-    try {
-      await handleUpdateUser(editingUser.id, { name: editForm.name.trim(), role: editForm.role });
-      setFeedback({ type: "success", message: `${editForm.name} updated successfully.` });
-      closeEdit();
-      await loadUsers();
-    } catch (err) {
-      setFeedback({ type: "error", message: err.message });
-    } finally {
-      setEditPending(false);
-    }
-  };
+  if (!editForm.name.trim() || !editForm.role) return;
+  setEditPending(true);
+
+  try {
+    await handleUpdateUser(editingUser.id, {
+      name: editForm.name.trim(),
+      role: editForm.role,
+    });
+
+    await logActivity({
+      userId: userEmail || null,
+      userName: displayName || userEmail || "Unknown User",
+      userType: role || "staff",
+      action: "UPDATE USER",
+      module: "User Management",
+      details: `Updated user ${editingUser.name} -> name: ${editForm.name.trim()}, role: ${editForm.role}`,
+    });
+
+    setFeedback({ type: "success", message: `${editForm.name} updated successfully.` });
+    closeEdit();
+    await loadUsers();
+  } catch (err) {
+    setFeedback({ type: "error", message: err.message });
+  } finally {
+    setEditPending(false);
+  }
+};
 
   // ── Delete (approved tab) ─────────────────────────────────
   const openDelete  = (user) => setDeletingUser(user);
   const closeDelete = () => setDeletingUser(null);
 
   const confirmDelete = async () => {
-    setDeletePending(true);
-    try {
-      await handleDeleteUser(deletingUser.id);
-      setFeedback({ type: "success", message: `${deletingUser.name} has been deleted.` });
-      closeDelete();
-      await loadUsers();
-    } catch (err) {
-      setFeedback({ type: "error", message: err.message });
-    } finally {
-      setDeletePending(false);
-    }
-  };
+  setDeletePending(true);
+
+  try {
+    await handleDeleteUser(deletingUser.id);
+
+    await logActivity({
+      userId: userEmail || null,
+      userName: displayName || userEmail || "Unknown User",
+      userType: role || "staff",
+      action: "DELETE USER",
+      module: "User Management",
+      details: `Deleted user ${deletingUser.name} (${deletingUser.email})`,
+    });
+
+    setFeedback({ type: "success", message: `${deletingUser.name} has been deleted.` });
+    closeDelete();
+    await loadUsers();
+  } catch (err) {
+    setFeedback({ type: "error", message: err.message });
+  } finally {
+    setDeletePending(false);
+  }
+};
 
   // ── Style helpers (identical to user-approvals/page.jsx) ──
   const cardClass = (extra = "") =>

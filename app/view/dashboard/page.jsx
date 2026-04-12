@@ -79,7 +79,7 @@ export default function page() {
   const [productInCount, setProductInCount] = useState(0);
   const [productOutCount, setProductOutCount] = useState(0);
 
-  // Component (parcel) inventory status counts
+  // Component (parcel) stock status counts
   const [statusCounts, setStatusCounts] = useState({
     out: 0,
     critical: 0,
@@ -87,7 +87,7 @@ export default function page() {
     available: 0,
   });
 
-  // Product inventory status counts
+  // Product stock status counts
   const [productStatusCounts, setProductStatusCounts] = useState({
     out: 0,
     critical: 0,
@@ -311,7 +311,9 @@ export default function page() {
             {/* Summary Cards - Stock In / Stock Out */}
             <div
               className={`grid gap-4 sm:gap-6 mb-8 ${
-                isAdmin ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-2" : "grid-cols-1"
+                isAdmin
+                  ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
+                  : "grid-cols-1 sm:grid-cols-2"
               }`}
             >
               <DashboardSummaryCard
@@ -324,25 +326,49 @@ export default function page() {
                 subtitle="Items in stock"
               />
 
+              <DashboardSummaryCard
+                onClick={() => handleCardClick("/view/product-in")}
+                containerClassName="bg-gradient-to-br from-[#1e40af] to-[#1e3a8a]"
+                Icon={Boxes}
+                MetaIcon={Clock}
+                title="Product In"
+                value={productInCount}
+                subtitle="Products in stock"
+                animationDelay="0.05s"
+              />
+
               {isAdmin && (
-                <DashboardSummaryCard
-                  onClick={() => handleCardClick("/view/parcel-delivery")}
-                  containerClassName="bg-gradient-to-br from-[#ea580c] to-[#c2410c]"
-                  Icon={PackageOpen}
-                  MetaIcon={TrendingDown}
-                  title="Stock Out"
-                  value={parcelDeliveryCount}
-                  subtitle="Items delivered"
-                  animationDelay="0.1s"
-                />
+                <>
+                  <DashboardSummaryCard
+                    onClick={() => handleCardClick("/view/parcel-delivery")}
+                    containerClassName="bg-gradient-to-br from-[#ea580c] to-[#c2410c]"
+                    Icon={PackageOpen}
+                    MetaIcon={TrendingDown}
+                    title="Stock Out"
+                    value={parcelDeliveryCount}
+                    subtitle="Items delivered"
+                    animationDelay="0.1s"
+                  />
+
+                  <DashboardSummaryCard
+                    onClick={() => handleCardClick("/view/product-out")}
+                    containerClassName="bg-gradient-to-br from-[#ea580c] to-[#c2410c]"
+                    Icon={Package}
+                    MetaIcon={TrendingDown}
+                    title="Product Out"
+                    value={productOutCount}
+                    subtitle="Products released"
+                    animationDelay="0.15s"
+                  />
+                </>
               )}
             </div>
 
-            {/* ============= COMPONENT INVENTORY STATUS ============= */}
+            {/* ============= COMPONENT STOCK STATUS ============= */}
             <div className="mb-8">
               <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
                 <Package className="w-5 h-5 text-[#1e40af]" />
-                Component Inventory Status
+                Stock Status
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <DashboardStatusCard
@@ -404,11 +430,11 @@ export default function page() {
               </div>
             </div>
 
-            {/* ============= PRODUCT INVENTORY STATUS ============= */}
+            {/* ============= PRODUCT STOCK STATUS ============= */}
             <div className="mb-8">
               <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
                 <Boxes className="w-5 h-5 text-[#7c3aed]" />
-                Product Inventory Status
+                Product Stock Status
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <DashboardStatusCard
@@ -540,7 +566,7 @@ export default function page() {
               >
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold">
-                    Components Needing Attention
+                    Stocks Needing Attention
                   </h3>
                   <span
                     className={`px-3 py-1 rounded-full text-xs font-medium ${darkMode ? "bg-orange-900/30 text-orange-400" : "bg-orange-50 text-orange-700"}`}

@@ -6,6 +6,7 @@ import {
   insertProductOut,
   getProductOut,
   reserveComponentsFromStock,
+  rollbackReservedComponents,
   deleteAllProductInItems,
   deleteAllProductOutItems,
   updateProductInDescription,
@@ -72,6 +73,7 @@ export const handleAddMultipleProductsIn = async (productsData) => {
     });
 
     if (result?.__error || !result) {
+      await rollbackReservedComponents(stockResult);
       errors.push({ product: product_name, error: result?.__error || "Error adding product" });
     } else {
       results.push({
@@ -146,10 +148,12 @@ export const handleAddProductIn = async (
   });
 
   if (result?.__error) {
+    await rollbackReservedComponents(stockResult);
     return { success: false, message: result.__error };
   }
 
   if (!result) {
+    await rollbackReservedComponents(stockResult);
     return { success: false, message: "Error adding/updating product" };
   }
 

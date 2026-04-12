@@ -3,11 +3,12 @@
 
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import * as XLSX from "xlsx";
+
 import React, { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import Sidebar from "../../components/Sidebar";
 import TopNavbar from "../../components/TopNavbar";
+import { logActivity } from "../../utils/logActivity";
 import AuthGuard from "../../components/AuthGuard";
 import StockHistoryModal from "../../components/StockHistoryModal";
 import StockThresholdModal from "../../components/StockThresholdModal";
@@ -27,6 +28,8 @@ import {
   FileJson,
   FileDown,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Upload,
 } from "lucide-react";
 import Link from "next/link";
@@ -43,7 +46,7 @@ import {
 import { fetchParcelItems } from "../../utils/parcelShippedHelper";
 import { fetchParcelOutItems } from "../../utils/parcelOutHelper";
 import { useAuth } from "../../hook/useAuth";
-import { isAdminRole } from "../../utils/roleHelper";
+import { isAdminRole, isStaffRole } from "../../utils/roleHelper";
 import { saveAdminUndoAction } from "../../utils/adminUndo";
 import {
   buildDescription,
@@ -52,12 +55,12 @@ import {
 } from "../../utils/inventoryMeta";
 import {
   CATEGORIES,
-  COMPONENT_CATEGORY_OPTIONS,
+  CATEGORY_OPTIONS,
+  PRODUCT_CATEGORIES,
   PRODUCT_CATEGORY_OPTIONS,
   getCategoryColor,
   getCategoryIcon,
 } from "../../utils/categoryUtils";
-import CategoryManager from "../../components/CategoryManager";
 import {
   addParcelInItem,
   updateParcelInItem,
@@ -130,8 +133,13 @@ export default function Page() {
   const [productSearch, setProductSearch] = useState("");
   const [parcelCategoryFilter, setParcelCategoryFilter] = useState("all");
   const [productCategoryFilter, setProductCategoryFilter] = useState("all");
-  const { role } = useAuth();
+  const [parcelSortOrder, setParcelSortOrder] = useState("default");
+  const [productSortOrder, setProductSortOrder] = useState("default");
+  const [parcelCurrentPage, setParcelCurrentPage] = useState(1);
+  const [productCurrentPage, setProductCurrentPage] = useState(1);
+  const { role, displayName, userEmail } = useAuth();
   const isAdmin = isAdminRole(role);
+  const canViewHistory = isAdmin || isStaffRole(role);
   const [isUpdatingCategoryId, setIsUpdatingCategoryId] = useState(null);
   const [categoryTransferError, setCategoryTransferError] = useState("");
   const [descriptionUpdateError, setDescriptionUpdateError] = useState("");
@@ -219,15 +227,6 @@ export default function Page() {
   const [importFile, setImportFile] = useState(null);
   const [importLoading, setImportLoading] = useState(false);
   const [importResult, setImportResult] = useState(null);
-
-  // New category product management
-  const [showNewCategoryModal, setShowNewCategoryModal] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState("");
-  const [newCategoryDescription, setNewCategoryDescription] = useState("");
-
-  // Category management state
-  const [showComponentCategoryManager, setShowComponentCategoryManager] = useState(false);
-  const [showProductCategoryManager, setShowProductCategoryManager] = useState(false);
 
   const parcelTableRef = useRef(null);
   const productTableRef = useRef(null);
@@ -477,58 +476,174 @@ export default function Page() {
     );
   });
 
-  const transferCategory = async ({ type, id, nextCategory }) => {
-    setCategoryTransferError("");
-    setIsUpdatingCategoryId(id);
-    const categoryValue = nextCategory || CATEGORIES.OTHERS;
+  const getHistoryTimestamp = (row) => {
+    const createdAt = Date.parse(row?.created_at || "");
+    if (!Number.isNaN(createdAt)) return createdAt;
 
-    try {
-      if (type === "parcel") {
-        const result = await updateParcelInItem(id, { category: categoryValue });
-        if (result?.error) throw result.error;
-        setParcelItems((prev) =>
-          prev.map((row) =>
-            row.id === id ? { ...row, category: categoryValue } : row,
-          ),
-        );
-      }
+    const dateTime = Date.parse(
+      `${row?.date || ""} ${row?.time_in || row?.time || ""}`,
+    );
+    if (!Number.isNaN(dateTime)) return dateTime;
 
-      if (type === "product") {
-        const result = await updateProductIn(id, { category: categoryValue });
-        if (result?.error) throw result.error;
-        setProductItems((prev) =>
-          prev.map((row) =>
-            row.id === id ? { ...row, category: categoryValue } : row,
-          ),
-        );
+    return 0;
+  };
+
+  const sortByHistoryDate = (items = [], sortOrder = "default") => {
+    if (sortOrder === "default") return [...items];
+    return [...items].sort((a, b) => {
+      if (sortOrder === "newest") {
+        return getHistoryTimestamp(b) - getHistoryTimestamp(a);
       }
-    } catch (err) {
-      setCategoryTransferError(
-        err?.message || "Failed to transfer category. Please try again.",
-      );
-    } finally {
-      setIsUpdatingCategoryId(null);
+      if (sortOrder === "oldest") {
+        return getHistoryTimestamp(a) - getHistoryTimestamp(b);
+      }
+      return 0;
+    });
+  };
+
+  const sortedParcelItems = sortByHistoryDate(filteredParcelItems, parcelSortOrder);
+  const sortedProductItems = sortByHistoryDate(
+    filteredProductItems,
+    productSortOrder,
+  );
+
+  const PARCEL_ITEMS_PER_PAGE = 10;
+  const PRODUCT_ITEMS_PER_PAGE = 5;
+
+  const parcelTotalPages =
+    Math.ceil(sortedParcelItems.length / PARCEL_ITEMS_PER_PAGE) || 1;
+  const productTotalPages =
+    Math.ceil(sortedProductItems.length / PRODUCT_ITEMS_PER_PAGE) || 1;
+
+  const parcelIndexOfFirstItem = (parcelCurrentPage - 1) * PARCEL_ITEMS_PER_PAGE;
+  const parcelIndexOfLastItem = parcelIndexOfFirstItem + PARCEL_ITEMS_PER_PAGE;
+  const paginatedParcelItems = sortedParcelItems.slice(
+    parcelIndexOfFirstItem,
+    parcelIndexOfLastItem,
+  );
+
+  const productIndexOfFirstItem =
+    (productCurrentPage - 1) * PRODUCT_ITEMS_PER_PAGE;
+  const productIndexOfLastItem =
+    productIndexOfFirstItem + PRODUCT_ITEMS_PER_PAGE;
+  const paginatedProductItems = sortedProductItems.slice(
+    productIndexOfFirstItem,
+    productIndexOfLastItem,
+  );
+
+  const getPageNumbers = (currentPage, totalPages) => {
+    const pageNumbers = [];
+    const maxPagesToShow = 5;
+
+    if (totalPages <= maxPagesToShow) {
+      for (let i = 1; i <= totalPages; i += 1) pageNumbers.push(i);
+      return pageNumbers;
     }
+
+    if (currentPage <= 3) {
+      for (let i = 1; i <= 4; i += 1) pageNumbers.push(i);
+      pageNumbers.push("...");
+      pageNumbers.push(totalPages);
+      return pageNumbers;
+    }
+
+    if (currentPage >= totalPages - 2) {
+      pageNumbers.push(1);
+      pageNumbers.push("...");
+      for (let i = totalPages - 3; i <= totalPages; i += 1) {
+        pageNumbers.push(i);
+      }
+      return pageNumbers;
+    }
+
+    pageNumbers.push(1);
+    pageNumbers.push("...");
+    pageNumbers.push(currentPage - 1);
+    pageNumbers.push(currentPage);
+    pageNumbers.push(currentPage + 1);
+    pageNumbers.push("...");
+    pageNumbers.push(totalPages);
+    return pageNumbers;
   };
 
-  // Category management handlers
-  const handleAddComponentCategory = async (newCategory) => {
-    // Simulate API call with delay for better UX
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // For now, just show a success message - in a real app this would update backend
-    // Here you would typically update the categories in your database
-    console.log(`Component category "${newCategory}" added successfully!`);
-  };
+  useEffect(() => {
+    setParcelCurrentPage(1);
+  }, [filterParcelStatus, parcelCategoryFilter, parcelSearch, parcelSortOrder]);
 
-  const handleAddProductCategory = async (newCategory) => {
-    // Simulate API call with delay for better UX
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // For now, just show a success message - in a real app this would update backend
-    // Here you would typically update the categories in your database
-    console.log(`Product category "${newCategory}" added successfully!`);
-  };
+  useEffect(() => {
+    setProductCurrentPage(1);
+  }, [
+    filterProductStatus,
+    productCategoryFilter,
+    productSearch,
+    productSortOrder,
+  ]);
+
+  useEffect(() => {
+    if (parcelCurrentPage > parcelTotalPages) setParcelCurrentPage(parcelTotalPages);
+  }, [parcelCurrentPage, parcelTotalPages]);
+
+  useEffect(() => {
+    if (productCurrentPage > productTotalPages) {
+      setProductCurrentPage(productTotalPages);
+    }
+  }, [productCurrentPage, productTotalPages]);
+
+  const transferCategory = async ({ type, id, nextCategory }) => {
+  setCategoryTransferError("");
+  setIsUpdatingCategoryId(id);
+  const categoryValue =
+    nextCategory ||
+    (type === "product" ? PRODUCT_CATEGORIES.OTHER : CATEGORIES.OTHERS);
+
+  try {
+    if (type === "parcel") {
+      const result = await updateParcelInItem(id, { category: categoryValue });
+      if (result?.error) throw result.error;
+
+      setParcelItems((prev) =>
+        prev.map((row) =>
+          row.id === id ? { ...row, category: categoryValue } : row,
+        ),
+      );
+
+      await logActivity({
+        userId: userEmail || null,
+        userName: displayName || userEmail || "Unknown User",
+        userType: role || "staff",
+        action: "UPDATE CATEGORY",
+        module: "Inventory",
+        details: `Changed parcel category to ${categoryValue}`,
+      });
+    }
+
+    if (type === "product") {
+      const result = await updateProductIn(id, { category: categoryValue });
+      if (result?.error) throw result.error;
+
+      setProductItems((prev) =>
+        prev.map((row) =>
+          row.id === id ? { ...row, category: categoryValue } : row,
+        ),
+      );
+
+      await logActivity({
+        userId: userEmail || null,
+        userName: displayName || userEmail || "Unknown User",
+        userType: role || "staff",
+        action: "UPDATE_CATEGORY",
+        module: "Inventory",
+        details: `Changed product category to ${categoryValue}`,
+      });
+    }
+  } catch (err) {
+    setCategoryTransferError(
+      err?.message || "Failed to transfer category. Please try again.",
+    );
+  } finally {
+    setIsUpdatingCategoryId(null);
+  }
+};
 
   const countByStatus = (items = [], type) => {
     return items.reduce(
@@ -673,6 +788,19 @@ export default function Page() {
     let prodUpdated = 0;
     let prodDeleted = 0;
     const errors = [];
+
+    if (errors.length === 0) {
+      await logActivity({
+        userId: userEmail || null,
+        userName: displayName || userEmail || "Unknown User",
+        userType: role || "staff",
+        action: "IMPORT INVENTORY",
+        module: "Inventory",
+        details: `Imported inventory:
+    Components -> +${compAdded} / ~${compUpdated} / -${compDeleted}
+    Products -> +${prodAdded} / ~${prodUpdated} / -${prodDeleted}`,
+      });
+    }
 
     // ===== COMPONENTS — FULL SYNC (parcel_in table) =====
     const { data: existingParcels } = await getParcelInItems();
@@ -850,7 +978,7 @@ export default function Page() {
     doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 26);
 
     doc.setFontSize(14);
-    doc.text("Components Stock Status", 14, 40);
+    doc.text("Stock Status", 14, 40);
     autoTable(doc, {
       startY: 45,
       head: [["Item Name", "Stock Quantity", "Status", "Date Added"]],
@@ -867,7 +995,7 @@ export default function Page() {
 
     const finalY = doc.lastAutoTable.finalY || 45;
     doc.setFontSize(14);
-    doc.text("Product Inventory Status", 14, finalY + 15);
+    doc.text("Product Status", 14, finalY + 15);
     autoTable(doc, {
       startY: finalY + 20,
       head: [["Product Name", "Stock Quantity", "Status", "Date Added"]],
@@ -920,11 +1048,11 @@ export default function Page() {
     );
 
     const csv = [
-      "COMPONENTS STOCK STATUS",
+      "STOCK STATUS",
       "Item Name,Stock Quantity,Status,Date Added",
       ...parcelRows,
       "",
-      "PRODUCT INVENTORY STATUS",
+      "PRODUCT STATUS",
       "Product Name,Stock Quantity,Status,Date Added",
       ...productRows,
     ].join("\n");
@@ -998,12 +1126,12 @@ export default function Page() {
       <body>
         <h1>Inventory Report</h1>
         <p class="generated">Generated: ${new Date().toLocaleString()}</p>
-        <h2>Components Stock Status</h2>
+        <h2>Stock Status</h2>
         <table>
           <thead><tr><th>Item Name</th><th>Stock Quantity</th><th>Status</th><th>Date Added</th></tr></thead>
           <tbody>${parcelRows}</tbody>
         </table>
-        <h2>Product Inventory Status</h2>
+        <h2>Product Status</h2>
         <table>
           <thead><tr><th>Product Name</th><th>Stock Quantity</th><th>Status</th><th>Date Added</th></tr></thead>
           <tbody>${productRows}</tbody>
@@ -1102,25 +1230,6 @@ export default function Page() {
       border: "hover:border-indigo-300",
     },
   ];
-
-  // Functions for new category management
-  const handleCreateNewCategory = () => {
-    if (!newCategoryName.trim()) {
-      alert("Please enter a category name");
-      return;
-    }
-    
-    // Here you would typically save to database
-    console.log("Creating new category:", {
-      name: newCategoryName,
-      description: newCategoryDescription
-    });
-    
-    alert(`New category "${newCategoryName}" created successfully!`);
-    setNewCategoryName("");
-    setNewCategoryDescription("");
-    setShowNewCategoryModal(false);
-  };
 
   return (
     <AuthGuard darkMode={darkMode}>
@@ -1278,17 +1387,9 @@ export default function Page() {
 
             {/* ============= PARCEL SECTION ============= */}
             <div className="mb-8">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <Package className="w-6 h-6 text-[#1e40af]" />
-                  <h2 className="text-xl font-bold">Component Inventory Status</h2>
-                </div>
-                <CategoryManager
-                  darkMode={darkMode}
-                  onAddCategory={handleAddComponentCategory}
-                  existingCategories={COMPONENT_CATEGORY_OPTIONS.map(cat => cat.label)}
-                  title="Add Component Category"
-                />
+              <div className="flex items-center gap-2 mb-4">
+                <Package className="w-6 h-6 text-[#1e40af]" />
+                <h2 className="text-xl font-bold">Stock Status</h2>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -1310,9 +1411,7 @@ export default function Page() {
                   >
                     Out of Stock
                   </p>
-                  <p className="text-2xl font-bold">
-                    {parcelStatusCounts.out + productStatusCounts.out}
-                  </p>
+                  <p className="text-2xl font-bold">{parcelStatusCounts.out}</p>
                 </div>
                 <div
                   onClick={() => setFilterParcelStatus("critical")}
@@ -1333,7 +1432,7 @@ export default function Page() {
                     Critical Level
                   </p>
                   <p className="text-2xl font-bold">
-                    {parcelStatusCounts.critical + productStatusCounts.critical}
+                    {parcelStatusCounts.critical}
                   </p>
                 </div>
                 <div
@@ -1354,9 +1453,7 @@ export default function Page() {
                   >
                     Low Stock
                   </p>
-                  <p className="text-2xl font-bold">
-                    {parcelStatusCounts.low + productStatusCounts.low}
-                  </p>
+                  <p className="text-2xl font-bold">{parcelStatusCounts.low}</p>
                 </div>
                 <div
                   onClick={() => setFilterParcelStatus("available")}
@@ -1364,7 +1461,7 @@ export default function Page() {
                   style={{ animationDelay: "0.4s" }}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <Package className="w-5 h-5 text-[#10B981]" />
+                    <Box className="w-5 h-5 text-[#22C55E]" />
                     <span
                       className={`text-xs px-2 py-1 rounded-full ${darkMode ? "bg-[#22C55E]/20" : "bg-[#DCFCE7]"} text-[#22C55E]`}
                     >
@@ -1374,16 +1471,16 @@ export default function Page() {
                   <p
                     className={`text-xs mb-1 ${darkMode ? "text-gray-400" : "text-gray-600"}`}
                   >
-                    Normal Stock
+                    Available
                   </p>
                   <p className="text-2xl font-bold">
-                    {parcelStatusCounts.available + productStatusCounts.available}
+                    {parcelStatusCounts.available}
                   </p>
                 </div>
               </div>
 
-              <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="relative">
+              <div className="mb-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div>
                   <label
                     className={`block text-sm font-medium mb-2 ${darkMode ? "text-gray-300" : "text-gray-700"}`}
                   >
@@ -1392,11 +1489,7 @@ export default function Page() {
                   <select
                     value={filterParcelStatus}
                     onChange={(e) => setFilterParcelStatus(e.target.value)}
-                    className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm appearance-none bg-no-repeat bg-right pr-8 ${
-                      darkMode 
-                        ? "border-[#374151] focus:ring-[#a78bfa] focus:border-[#a78bfa] bg-[#111827] text-white bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIiIGhlaWdodD0iOCIgdmlld0JveD0iMCAwIDEyIDgiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0xIDFMNiA2TDExIDEiIHN0cm9rZT0iIzlDQTNBMSIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPC9zdmc+')]" 
-                        : "border-[#D1D5DB] focus:ring-[#1e40af] focus:border-[#1e40af] bg-white text-black bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIiIGhlaWdodD0iOCIgdmlld0JveD0iMCAwIDEyIDgiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0xIDFMNiA2TDExIDEiIHN0cm9rZT0iIzYwQTI4MSIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPC9zdmc+')]"
-                    }`}
+                    className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm ${darkMode ? "border-[#374151] focus:ring-[#a78bfa] focus:border-[#a78bfa] bg-[#111827] text-white" : "border-[#D1D5DB] focus:ring-[#1e40af] focus:border-[#1e40af] bg-white text-black"}`}
                   >
                     <option value="all">
                       All Status ({parcelItems.length})
@@ -1415,7 +1508,7 @@ export default function Page() {
                     </option>
                   </select>
                 </div>
-                <div className="relative">
+                <div>
                   <label
                     className={`block text-sm font-medium mb-2 ${darkMode ? "text-gray-300" : "text-gray-700"}`}
                   >
@@ -1424,46 +1517,45 @@ export default function Page() {
                   <select
                     value={parcelCategoryFilter}
                     onChange={(e) => setParcelCategoryFilter(e.target.value)}
-                    className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm appearance-none bg-no-repeat bg-right pr-8 ${
-                      darkMode 
-                        ? "border-[#374151] focus:ring-[#a78bfa] focus:border-[#a78bfa] bg-[#111827] text-white bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIiIGhlaWdodD0iOCIgdmlld0JveD0iMCAwIDEyIDgiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0xIDFMNiA2TDExIDEiIHN0cm9rZT0iIzlDQTNBMSIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPC9zdmc+')]" 
-                        : "border-[#D1D5DB] focus:ring-[#1e40af] focus:border-[#1e40af] bg-white text-black bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIiIGhlaWdodD0iOCIgdmlld0JveD0iMCAwIDEyIDgiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0xIDFMNiA2TDExIDEiIHN0cm9rZT0iIzYwQTI4MSIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPC9zdmc+')]"
-                    }`}
+                    className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm ${darkMode ? "border-[#374151] focus:ring-[#a78bfa] focus:border-[#a78bfa] bg-[#111827] text-white" : "border-[#D1D5DB] focus:ring-[#1e40af] focus:border-[#1e40af] bg-white text-black"}`}
                   >
                     <option value="all">All Categories</option>
-                    {COMPONENT_CATEGORY_OPTIONS.map((cat) => (
+                    {CATEGORY_OPTIONS.map((cat) => (
                       <option key={cat.value} value={cat.value}>
                         {cat.label}
                       </option>
                     ))}
                   </select>
                 </div>
-                <div className="relative">
+                <div>
                   <label
                     className={`block text-sm font-medium mb-2 ${darkMode ? "text-gray-300" : "text-gray-700"}`}
                   >
                     Search:
                   </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={parcelSearch}
-                      onChange={(e) => setParcelSearch(e.target.value)}
-                      placeholder="Search by name, code, or SKU"
-                      className={`border rounded-lg px-3 py-2 w-full pl-10 focus:outline-none focus:ring-2 transition-all text-sm ${
-                        darkMode 
-                          ? "border-[#374151] focus:ring-[#60A5FA] focus:border-[#60A5FA] bg-[#111827] text-white placeholder-gray-400" 
-                          : "border-[#D1D5DB] focus:ring-[#1e40af] focus:border-[#1e40af] bg-white text-black placeholder-gray-500"
-                      }`}
-                    />
-                    <div className={`absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none ${
-                      darkMode ? 'text-gray-400' : 'text-gray-500'
-                    }`}>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
-                    </div>
-                  </div>
+                  <input
+                    type="text"
+                    value={parcelSearch}
+                    onChange={(e) => setParcelSearch(e.target.value)}
+                    placeholder="Search by name, code, or SKU"
+                    className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm ${darkMode ? "border-[#374151] focus:ring-[#60A5FA] focus:border-[#60A5FA] bg-[#111827] text-white" : "border-[#D1D5DB] focus:ring-[#1e40af] focus:border-[#1e40af] bg-white text-black"}`}
+                  />
+                </div>
+                <div>
+                  <label
+                    className={`block text-sm font-medium mb-2 ${darkMode ? "text-gray-300" : "text-gray-700"}`}
+                  >
+                    Sort by Date:
+                  </label>
+                  <select
+                    value={parcelSortOrder}
+                    onChange={(e) => setParcelSortOrder(e.target.value)}
+                    className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm ${darkMode ? "border-[#374151] focus:ring-[#60A5FA] focus:border-[#60A5FA] bg-[#111827] text-white" : "border-[#D1D5DB] focus:ring-[#1e40af] focus:border-[#1e40af] bg-white text-black"}`}
+                  >
+                    <option value="default">Default</option>
+                    <option value="newest">Newest to Oldest</option>
+                    <option value="oldest">Oldest to Newest</option>
+                  </select>
                 </div>
               </div>
 
@@ -1504,7 +1596,7 @@ export default function Page() {
                     <tbody
                       className={`divide-y ${darkMode ? "divide-[#374151]" : "divide-[#E5E7EB]"}`}
                     >
-                      {filteredParcelItems.length === 0 ? (
+                      {sortedParcelItems.length === 0 ? (
                         <tr>
                           <td colSpan="9" className="px-4 py-12 text-center">
                             <div className="flex flex-col items-center justify-center gap-3">
@@ -1525,7 +1617,7 @@ export default function Page() {
                           </td>
                         </tr>
                       ) : (
-                        filteredParcelItems.map((item, index) => (
+                        paginatedParcelItems.map((item, index) => (
                           <tr
                             key={index}
                             className={`transition-colors ${darkMode ? "hover:bg-[#374151]" : "hover:bg-[#F9FAFB]"}`}
@@ -1638,7 +1730,7 @@ export default function Page() {
                                     }`}
                                     aria-label="Transfer category"
                                   >
-                                    {COMPONENT_CATEGORY_OPTIONS.map((option) => (
+                                    {CATEGORY_OPTIONS.map((option) => (
                                       <option
                                         key={option.value}
                                         value={option.value}
@@ -1677,21 +1769,23 @@ export default function Page() {
                             <td className="px-4 py-3 text-sm">{item.date}</td>
                             <td className="px-4 py-3 text-sm">
                               <div className="flex items-center gap-2">
+                                {canViewHistory ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => openHistoryModal("parcel", item)}
+                                    className={`inline-flex items-center justify-center p-2 rounded-lg border transition ${
+                                      darkMode
+                                        ? "border-[#374151] hover:bg-[#374151] text-blue-300"
+                                        : "border-[#D1D5DB] hover:bg-[#EFF6FF] text-[#1D4ED8]"
+                                    }`}
+                                    title="View stock history"
+                                    aria-label="View stock history"
+                                  >
+                                    <Search className="w-4 h-4" />
+                                  </button>
+                                ) : null}
                                 {isAdmin ? (
                                   <>
-                                    <button
-                                      type="button"
-                                      onClick={() => openHistoryModal("parcel", item)}
-                                      className={`inline-flex items-center justify-center p-2 rounded-lg border transition ${
-                                        darkMode
-                                          ? "border-[#374151] hover:bg-[#374151] text-blue-300"
-                                          : "border-[#D1D5DB] hover:bg-[#EFF6FF] text-[#1D4ED8]"
-                                      }`}
-                                      title="View stock history"
-                                      aria-label="View stock history"
-                                    >
-                                      <Search className="w-4 h-4" />
-                                    </button>
                                     <button
                                       type="button"
                                       onClick={() => openThresholdModal("parcel", item)}
@@ -1716,7 +1810,7 @@ export default function Page() {
                                     </div>
                                   </Link>
                                 ) : null}
-                                {!isAdmin && item.quantity !== 0 ? "-" : null}
+                                {!canViewHistory && item.quantity !== 0 ? "-" : null}
                               </div>
                             </td>
                           </tr>
@@ -1725,22 +1819,105 @@ export default function Page() {
                     </tbody>
                   </table>
                 </div>
+
+                {sortedParcelItems.length > 0 && (
+                  <div
+                    className={`flex items-center justify-between px-4 py-3 border-t ${
+                      darkMode ? "border-[#374151]" : "border-[#E5E7EB]"
+                    }`}
+                  >
+                    <div
+                      className={`text-sm ${
+                        darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"
+                      }`}
+                    >
+                      Showing {parcelIndexOfFirstItem + 1} to{" "}
+                      {Math.min(parcelIndexOfLastItem, sortedParcelItems.length)} of{" "}
+                      {sortedParcelItems.length} entries
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setParcelCurrentPage((prev) => Math.max(prev - 1, 1))
+                        }
+                        disabled={parcelCurrentPage === 1}
+                        className={`p-2 rounded-lg transition-all ${
+                          parcelCurrentPage === 1
+                            ? darkMode
+                              ? "bg-[#374151] text-[#6B7280] cursor-not-allowed"
+                              : "bg-[#F3F4F6] text-[#9CA3AF] cursor-not-allowed"
+                            : darkMode
+                              ? "bg-[#374151] text-[#D1D5DB] hover:bg-[#4B5563]"
+                              : "bg-[#F3F4F6] text-[#374151] hover:bg-[#E5E7EB]"
+                        }`}
+                      >
+                        <ChevronLeft className="w-5 h-5" />
+                      </button>
+
+                      <div className="flex items-center gap-1">
+                        {getPageNumbers(parcelCurrentPage, parcelTotalPages).map(
+                          (pageNum, idx) =>
+                            pageNum === "..." ? (
+                              <span
+                                key={`parcel-ellipsis-${idx}`}
+                                className={`px-3 py-2 ${
+                                  darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"
+                                }`}
+                              >
+                                ...
+                              </span>
+                            ) : (
+                              <button
+                                key={`parcel-page-${pageNum}`}
+                                type="button"
+                                onClick={() => setParcelCurrentPage(pageNum)}
+                                className={`px-3 py-2 rounded-lg font-medium transition-all ${
+                                  parcelCurrentPage === pageNum
+                                    ? "bg-[#1E40AF] text-white shadow-md"
+                                    : darkMode
+                                      ? "bg-[#374151] text-[#D1D5DB] hover:bg-[#4B5563]"
+                                      : "bg-[#F3F4F6] text-[#374151] hover:bg-[#E5E7EB]"
+                                }`}
+                              >
+                                {pageNum}
+                              </button>
+                            ),
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setParcelCurrentPage((prev) =>
+                            Math.min(prev + 1, parcelTotalPages),
+                          )
+                        }
+                        disabled={parcelCurrentPage === parcelTotalPages}
+                        className={`p-2 rounded-lg transition-all ${
+                          parcelCurrentPage === parcelTotalPages
+                            ? darkMode
+                              ? "bg-[#374151] text-[#6B7280] cursor-not-allowed"
+                              : "bg-[#F3F4F6] text-[#9CA3AF] cursor-not-allowed"
+                            : darkMode
+                              ? "bg-[#374151] text-[#D1D5DB] hover:bg-[#4B5563]"
+                              : "bg-[#F3F4F6] text-[#374151] hover:bg-[#E5E7EB]"
+                        }`}
+                      >
+                        <ChevronRight className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
             {/* ============= PRODUCT SECTION ============= */}
             <div>
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <Box className="w-6 h-6 text-[#7c3aed]" />
-                  <h2 className="text-xl font-bold">Product Inventory Status</h2>
-                </div>
-                <CategoryManager
-                  darkMode={darkMode}
-                  onAddCategory={handleAddProductCategory}
-                  existingCategories={PRODUCT_CATEGORY_OPTIONS.map(cat => cat.label)}
-                  title="Add Product Category"
-                />
+              <div className="flex items-center gap-2 mb-4">
+                <Box className="w-6 h-6 text-[#7c3aed]" />
+                <h2 className="text-xl font-bold">Product Status</h2>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -1834,8 +2011,8 @@ export default function Page() {
                 </div>
               </div>
 
-              <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="relative">
+              <div className="mb-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div>
                   <label
                     className={`block text-sm font-medium mb-2 ${darkMode ? "text-gray-300" : "text-gray-700"}`}
                   >
@@ -1844,11 +2021,7 @@ export default function Page() {
                   <select
                     value={filterProductStatus}
                     onChange={(e) => setFilterProductStatus(e.target.value)}
-                    className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm appearance-none bg-no-repeat bg-right pr-8 ${
-                      darkMode 
-                        ? "border-[#374151] focus:ring-[#a78bfa] focus:border-[#a78bfa] bg-[#111827] text-white bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIiIGhlaWdodD0iOCIgdmlld0JveD0iMCAwIDEyIDgiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0xIDFMNiA2TDExIDEiIHN0cm9rZT0iIzlDQTNBMSIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPC9zdmc+')]" 
-                        : "border-[#D1D5DB] focus:ring-[#7c3aed] focus:border-[#7c3aed] bg-white text-black bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIiIGhlaWdodD0iOCIgdmlld0JveD0iMCAwIDEyIDgiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0xIDFMNiA2TDExIDEiIHN0cm9rZT0iIzYwQTI4MSIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPC9zdmc+')]"
-                    }`}
+                    className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm ${darkMode ? "border-[#374151] focus:ring-[#a78bfa] focus:border-[#a78bfa] bg-[#111827] text-white" : "border-[#D1D5DB] focus:ring-[#7c3aed] focus:border-[#7c3aed] bg-white text-black"}`}
                   >
                     <option value="all">
                       All Status ({productItems.length})
@@ -1867,7 +2040,7 @@ export default function Page() {
                     </option>
                   </select>
                 </div>
-                <div className="relative">
+                <div>
                   <label
                     className={`block text-sm font-medium mb-2 ${darkMode ? "text-gray-300" : "text-gray-700"}`}
                   >
@@ -1876,11 +2049,7 @@ export default function Page() {
                   <select
                     value={productCategoryFilter}
                     onChange={(e) => setProductCategoryFilter(e.target.value)}
-                    className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm appearance-none bg-no-repeat bg-right pr-8 ${
-                      darkMode 
-                        ? "border-[#374151] focus:ring-[#a78bfa] focus:border-[#a78bfa] bg-[#111827] text-white bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIiIGhlaWdodD0iOCIgdmlld0JveD0iMCAwIDEyIDgiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0xIDFMNiA2TDExIDEiIHN0cm9rZT0iIzlDQTNBMSIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPC9zdmc+')]" 
-                        : "border-[#D1D5DB] focus:ring-[#7c3aed] focus:border-[#7c3aed] bg-white text-black bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIiIGhlaWdodD0iOCIgdmlld0JveD0iMCAwIDEyIDgiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0xIDFMNiA2TDExIDEiIHN0cm9rZT0iIzYwQTI4MSIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPC9zdmc+')]"
-                    }`}
+                    className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm ${darkMode ? "border-[#374151] focus:ring-[#a78bfa] focus:border-[#a78bfa] bg-[#111827] text-white" : "border-[#D1D5DB] focus:ring-[#7c3aed] focus:border-[#7c3aed] bg-white text-black"}`}
                   >
                     <option value="all">All Categories</option>
                     {PRODUCT_CATEGORY_OPTIONS.map((cat) => (
@@ -1890,32 +2059,35 @@ export default function Page() {
                     ))}
                   </select>
                 </div>
-                <div className="relative">
+                <div>
                   <label
                     className={`block text-sm font-medium mb-2 ${darkMode ? "text-gray-300" : "text-gray-700"}`}
                   >
                     Search:
                   </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={productSearch}
-                      onChange={(e) => setProductSearch(e.target.value)}
-                      placeholder="Search by name, code, or SKU"
-                      className={`border rounded-lg px-3 py-2 w-full pl-10 focus:outline-none focus:ring-2 transition-all text-sm ${
-                        darkMode 
-                          ? "border-[#374151] focus:ring-[#a78bfa] focus:border-[#a78bfa] bg-[#111827] text-white placeholder-gray-400" 
-                          : "border-[#D1D5DB] focus:ring-[#7c3aed] focus:border-[#7c3aed] bg-white text-black placeholder-gray-500"
-                      }`}
-                    />
-                    <div className={`absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none ${
-                      darkMode ? 'text-gray-400' : 'text-gray-500'
-                    }`}>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
-                    </div>
-                  </div>
+                  <input
+                    type="text"
+                    value={productSearch}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                    placeholder="Search by name, code, or SKU"
+                    className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm ${darkMode ? "border-[#374151] focus:ring-[#a78bfa] focus:border-[#a78bfa] bg-[#111827] text-white" : "border-[#D1D5DB] focus:ring-[#7c3aed] focus:border-[#7c3aed] bg-white text-black"}`}
+                  />
+                </div>
+                <div>
+                  <label
+                    className={`block text-sm font-medium mb-2 ${darkMode ? "text-gray-300" : "text-gray-700"}`}
+                  >
+                    Sort by Date:
+                  </label>
+                  <select
+                    value={productSortOrder}
+                    onChange={(e) => setProductSortOrder(e.target.value)}
+                    className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm ${darkMode ? "border-[#374151] focus:ring-[#a78bfa] focus:border-[#a78bfa] bg-[#111827] text-white" : "border-[#D1D5DB] focus:ring-[#7c3aed] focus:border-[#7c3aed] bg-white text-black"}`}
+                  >
+                    <option value="default">Default</option>
+                    <option value="newest">Newest to Oldest</option>
+                    <option value="oldest">Oldest to Newest</option>
+                  </select>
                 </div>
               </div>
 
@@ -1956,7 +2128,7 @@ export default function Page() {
                     <tbody
                       className={`divide-y ${darkMode ? "divide-[#374151]" : "divide-[#E5E7EB]"}`}
                     >
-                      {filteredProductItems.length === 0 ? (
+                      {sortedProductItems.length === 0 ? (
                         <tr>
                           <td colSpan="9" className="px-4 py-12 text-center">
                             <div className="flex flex-col items-center justify-center gap-3">
@@ -1977,7 +2149,7 @@ export default function Page() {
                           </td>
                         </tr>
                       ) : (
-                        filteredProductItems.map((item, index) => (
+                        paginatedProductItems.map((item, index) => (
                           <tr
                             key={index}
                             className={`transition-colors ${darkMode ? "hover:bg-[#374151]" : "hover:bg-[#F9FAFB]"}`}
@@ -2144,7 +2316,7 @@ export default function Page() {
                                     {item.category || "Others"}
                                   </span>
                                   <select
-                                    value={item.category || CATEGORIES.OTHERS}
+                                    value={item.category || PRODUCT_CATEGORIES.OTHER}
                                     onChange={(e) =>
                                       transferCategory({
                                         type: "product",
@@ -2199,21 +2371,23 @@ export default function Page() {
                             <td className="px-4 py-3 text-sm">{item.date}</td>
                             <td className="px-4 py-3 text-sm">
                               <div className="flex items-center gap-2">
+                                {canViewHistory ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => openHistoryModal("product", item)}
+                                    className={`inline-flex items-center justify-center p-2 rounded-lg border transition ${
+                                      darkMode
+                                        ? "border-[#374151] hover:bg-[#374151] text-violet-300"
+                                        : "border-[#D1D5DB] hover:bg-[#F5F3FF] text-[#6D28D9]"
+                                    }`}
+                                    title="View stock history"
+                                    aria-label="View stock history"
+                                  >
+                                    <Search className="w-4 h-4" />
+                                  </button>
+                                ) : null}
                                 {isAdmin ? (
                                   <>
-                                    <button
-                                      type="button"
-                                      onClick={() => openHistoryModal("product", item)}
-                                      className={`inline-flex items-center justify-center p-2 rounded-lg border transition ${
-                                        darkMode
-                                          ? "border-[#374151] hover:bg-[#374151] text-violet-300"
-                                          : "border-[#D1D5DB] hover:bg-[#F5F3FF] text-[#6D28D9]"
-                                      }`}
-                                      title="View stock history"
-                                      aria-label="View stock history"
-                                    >
-                                      <Search className="w-4 h-4" />
-                                    </button>
                                     <button
                                       type="button"
                                       onClick={() => openThresholdModal("product", item)}
@@ -2238,7 +2412,7 @@ export default function Page() {
                                     </div>
                                   </Link>
                                 ) : null}
-                                {!isAdmin && item.quantity !== 0 ? "-" : null}
+                                {!canViewHistory && item.quantity !== 0 ? "-" : null}
                               </div>
                             </td>
                           </tr>
@@ -2247,6 +2421,97 @@ export default function Page() {
                     </tbody>
                   </table>
                 </div>
+
+                {sortedProductItems.length > 0 && (
+                  <div
+                    className={`flex items-center justify-between px-4 py-3 border-t ${
+                      darkMode ? "border-[#374151]" : "border-[#E5E7EB]"
+                    }`}
+                  >
+                    <div
+                      className={`text-sm ${
+                        darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"
+                      }`}
+                    >
+                      Showing {productIndexOfFirstItem + 1} to{" "}
+                      {Math.min(productIndexOfLastItem, sortedProductItems.length)} of{" "}
+                      {sortedProductItems.length} entries
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setProductCurrentPage((prev) => Math.max(prev - 1, 1))
+                        }
+                        disabled={productCurrentPage === 1}
+                        className={`p-2 rounded-lg transition-all ${
+                          productCurrentPage === 1
+                            ? darkMode
+                              ? "bg-[#374151] text-[#6B7280] cursor-not-allowed"
+                              : "bg-[#F3F4F6] text-[#9CA3AF] cursor-not-allowed"
+                            : darkMode
+                              ? "bg-[#374151] text-[#D1D5DB] hover:bg-[#4B5563]"
+                              : "bg-[#F3F4F6] text-[#374151] hover:bg-[#E5E7EB]"
+                        }`}
+                      >
+                        <ChevronLeft className="w-5 h-5" />
+                      </button>
+
+                      <div className="flex items-center gap-1">
+                        {getPageNumbers(productCurrentPage, productTotalPages).map(
+                          (pageNum, idx) =>
+                            pageNum === "..." ? (
+                              <span
+                                key={`product-ellipsis-${idx}`}
+                                className={`px-3 py-2 ${
+                                  darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"
+                                }`}
+                              >
+                                ...
+                              </span>
+                            ) : (
+                              <button
+                                key={`product-page-${pageNum}`}
+                                type="button"
+                                onClick={() => setProductCurrentPage(pageNum)}
+                                className={`px-3 py-2 rounded-lg font-medium transition-all ${
+                                  productCurrentPage === pageNum
+                                    ? "bg-[#6D28D9] text-white shadow-md"
+                                    : darkMode
+                                      ? "bg-[#374151] text-[#D1D5DB] hover:bg-[#4B5563]"
+                                      : "bg-[#F3F4F6] text-[#374151] hover:bg-[#E5E7EB]"
+                                }`}
+                              >
+                                {pageNum}
+                              </button>
+                            ),
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setProductCurrentPage((prev) =>
+                            Math.min(prev + 1, productTotalPages),
+                          )
+                        }
+                        disabled={productCurrentPage === productTotalPages}
+                        className={`p-2 rounded-lg transition-all ${
+                          productCurrentPage === productTotalPages
+                            ? darkMode
+                              ? "bg-[#374151] text-[#6B7280] cursor-not-allowed"
+                              : "bg-[#F3F4F6] text-[#9CA3AF] cursor-not-allowed"
+                            : darkMode
+                              ? "bg-[#374151] text-[#D1D5DB] hover:bg-[#4B5563]"
+                              : "bg-[#F3F4F6] text-[#374151] hover:bg-[#E5E7EB]"
+                        }`}
+                      >
+                        <ChevronRight className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -2637,104 +2902,6 @@ export default function Page() {
                   }`}
                 >
                   Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* New Category Modal */}
-        {showNewCategoryModal && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <div
-              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-              onClick={() => setShowNewCategoryModal(false)}
-            />
-            <div
-              className={`relative z-10 w-full max-w-md rounded-xl border shadow-2xl p-6 ${
-                darkMode
-                  ? "bg-[#1F2937] border-[#374151] text-white"
-                  : "bg-white border-[#E5E7EB] text-[#111827]"
-              }`}
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold">Create New Category</h3>
-                <button
-                  onClick={() => setShowNewCategoryModal(false)}
-                  className={`p-2 rounded-lg transition-colors ${
-                    darkMode
-                      ? "hover:bg-[#374151] text-gray-400"
-                      : "hover:bg-gray-100 text-gray-600"
-                  }`}
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label
-                    className={`block text-sm font-medium mb-2 ${
-                      darkMode ? "text-gray-300" : "text-gray-700"
-                    }`}
-                  >
-                    Category Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={newCategoryName}
-                    onChange={(e) => setNewCategoryName(e.target.value)}
-                    placeholder="Enter category name"
-                    className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-all ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#60A5FA] focus:border-[#60A5FA] bg-[#111827] text-white"
-                        : "border-[#D1D5DB] focus:ring-[#1e40af] focus:border-[#1e40af] bg-white text-black"
-                    }`}
-                  />
-                </div>
-
-                <div>
-                  <label
-                    className={`block text-sm font-medium mb-2 ${
-                      darkMode ? "text-gray-300" : "text-gray-700"
-                    }`}
-                  >
-                    Description
-                  </label>
-                  <textarea
-                    value={newCategoryDescription}
-                    onChange={(e) => setNewCategoryDescription(e.target.value)}
-                    placeholder="Enter category description (optional)"
-                    rows={3}
-                    className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-all resize-none ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#60A5FA] focus:border-[#60A5FA] bg-[#111827] text-white"
-                        : "border-[#D1D5DB] focus:ring-[#1e40af] focus:border-[#1e40af] bg-white text-black"
-                    }`}
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 mt-6">
-                <button
-                  onClick={() => setShowNewCategoryModal(false)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    darkMode
-                      ? "bg-gray-600 hover:bg-gray-700 text-white"
-                      : "bg-gray-200 hover:bg-gray-300 text-gray-800"
-                  }`}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleCreateNewCategory}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    darkMode
-                      ? "bg-green-600 hover:bg-green-700 text-white"
-                      : "bg-green-500 hover:bg-green-600 text-white"
-                  }`}
-                >
-                  Create Category
                 </button>
               </div>
             </div>

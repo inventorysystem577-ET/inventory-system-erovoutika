@@ -5,15 +5,30 @@ import React, { useState, useEffect } from "react";
 import AuthGuard from "../../components/AuthGuard";
 import TopNavbar from "../../components/TopNavbar";
 import Sidebar from "../../components/Sidebar";
-import { PackageOpen, Plus, Clock, Calendar, Package, X } from "lucide-react";
+import { logActivity } from "../../utils/logActivity";
+import { useSearchParams } from "next/navigation";
+import {
+  PackageCheck,
+  Plus,
+  Clock,
+  Calendar,
+  Package,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import "animate.css";
 import {
   fetchParcelItems,
   handleAddParcelIn,
   updateParcelInItemHelper,
 } from "../../utils/parcelShippedHelper";
-import { fetchParcelOutItems } from "../../utils/parcelOutHelper";
-import { CATEGORIES, COMPONENT_CATEGORY_OPTIONS, getCategoryColor, getCategoryIcon } from "../../utils/categoryUtils";
+import AuthGuard from "../../components/AuthGuard";
+import { useAuth } from "../../hook/useAuth";
+import { isAdminRole } from "../../utils/roleHelper";
+import useBulkStockInForm from "../../hook/useBulkStockInForm";
+import StockInBulkRow from "../../components/StockInBulkRow";
+import { products } from "../../utils/productsData";
+import { CATEGORIES, CATEGORY_OPTIONS, getCategoryColor, getCategoryIcon } from "../../utils/categoryUtils";
 import { buildProductCode } from "../../utils/inventoryMeta";
 
 export default function Page() {
@@ -50,26 +65,30 @@ export default function Page() {
   const [itemSuggestions, setItemSuggestions] = useState([]);
   const computedTotalPrice = (Number(price) || 0) * (Number(quantity) || 0);
   const [isUpdatingCategoryId, setIsUpdatingCategoryId] = useState(null);
+  const [showStockInHistory, setShowStockInHistory] = useState(false);
+  const [showMultipleInput, setShowMultipleInput] = useState(false);
+  const { role, displayName, userEmail } = useAuth();
+  const isAdmin = isAdminRole(role);
 
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+  const {
+    bulkRows,
+    addRow,
+    removeRow,
+    updateRow,
+    handleBulkSubmit,
+    error: bulkError,
+    message: bulkMessage,
+  } = useBulkStockInForm({
+    onSuccess: async () => {
+      await loadItems();
+    },
+    actor: { role, displayName, userEmail },
+  });
 
-  // Helper functions for multi-product management
-  const addParcelRow = () => {
-    const newId = Math.max(...parcelRows.map(row => row.id)) + 1;
-    setParcelRows([
-      ...parcelRows,
-      {
-        id: newId,
-        name: "",
-        quantity: 1,
-        price: "",
-        category: CATEGORIES.COMPONENT,
-        shippingMode: "",
-        clientName: "",
-      }
-    ]);
+  // Calculate unique items (count of distinct item names)
+  const getUniqueItemCount = (itemsList) => {
+    const uniqueNames = new Set(itemsList.map(item => item.name).filter(Boolean));
+    return uniqueNames.size;
   };
 
   const uniqueItemCount = getUniqueItemCount(items);
@@ -177,39 +196,37 @@ export default function Page() {
     );
     if (!confirmed) return;
 
-    // Process each parcel
-    for (const row of validParcels) {
-      const quantityToAdd = parseInt(row.quantity);
-      const computedTotalPrice = (parseFloat(row.price) || 0) * quantityToAdd;
+    const result = await handleAddParcelIn({
+      name,
+      date,
+      quantity,
+      timeHour,
+      timeMinute,
+      timeAMPM,
+      shipping_mode: shippingMode,
+      client_name: clientName,
+      price: computedTotalPrice,
+      category: category,
+    });
+    if (!result || !result.newItem) return;
 
-      await handleAddParcelIn({
-        name: row.name,
-        date,
-        quantity: quantityToAdd,
-        timeHour,
-        timeMinute,
-        timeAMPM,
-        shipping_mode: row.shippingMode,
-        client_name: row.clientName,
-        price: computedTotalPrice,
-        category: row.category,
-      });
-    }
+    await logActivity({
+      userId: userEmail || null,
+     userName: displayName || userEmail || "Unknown User",
+      userType: role || "staff",
+      action: "Stock IN",
+      module: "Inventory",
+      details: `Added ${quantity}x ${name}`,
+    });
+    
+    setItems(
+      result.items
+        .map((item) => ({ ...item, quantity: Number(item.quantity || 0) }))
+        .filter((item) => item.quantity > 0)
+        .sort((a, b) => b.quantity - a.quantity),
+    );
 
-    // Reload items and reset form
-    await loadItems();
-    
-    // Reset form after successful submission
-    setParcelRows([{
-      id: 1,
-      name: "",
-      quantity: 1,
-      price: "",
-      category: CATEGORIES.ELECTRONICS,
-      shippingMode: "",
-      clientName: "",
-    }]);
-    
+    setName("");
     setDate("");
     setTimeHour("1");
     setTimeMinute("00");
@@ -297,6 +314,7 @@ export default function Page() {
             </div>
 
             {/* Form */}
+            {!showMultipleInput && (
             <form
               onSubmit={handleAddItem}
               className={getClassName(
@@ -394,225 +412,230 @@ export default function Page() {
                 </div>
               </div>
 
-              {/* Multi-product rows */}
-              <div className="space-y-4 mb-6">
-                {parcelRows.map((row, index) => (
-                  <div
-                    key={row.id}
-                    className={getClassName(
-                      darkMode,
-                      "p-4 rounded-lg border bg-[#111827] border-[#374151]",
-                      "p-4 rounded-lg border bg-gray-50 border-gray-200"
-                    )}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-4">
+                {/* Category */}
+                <div>
+                  <label
+                    className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
+                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
+                    }`}
                   >
-                    <div className="flex items-center justify-between mb-3">
-                      <h4 className={getClassName(
-                        darkMode,
-                        "text-sm font-medium text-gray-300",
-                        "text-sm font-medium text-gray-700"
-                      )}>
-                        Item {index + 1}
-                      </h4>
-                      {parcelRows.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeParcelRow(row.id)}
-                          className={getClassName(
-                            darkMode,
-                            "p-1 rounded hover:bg-red-900/20 text-red-400 transition-colors",
-                            "p-1 rounded hover:bg-red-100 text-red-600 transition-colors"
-                          )}
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {/* Item Name */}
-                      <div className="flex flex-col">
-                        <label className={getClassName(
-                          darkMode,
-                          "text-xs font-medium mb-1 text-gray-400",
-                          "text-xs font-medium mb-1 text-gray-600"
-                        )}>
-                          Item Name
-                        </label>
-                        <input
-                          type="text"
-                          value={row.name}
-                          onChange={(e) => updateParcelRow(row.id, 'name', e.target.value)}
-                          className={getClassName(
-                            darkMode,
-                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
-                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
-                          )}
-                          required
-                        />
-                      </div>
-
-                      {/* Quantity */}
-                      <div className="flex flex-col">
-                        <label className={getClassName(
-                          darkMode,
-                          "text-xs font-medium mb-1 text-gray-400",
-                          "text-xs font-medium mb-1 text-gray-600"
-                        )}>
-                          Quantity
-                        </label>
-                        <input
-                          type="number"
-                          min="1"
-                          value={row.quantity}
-                          onChange={(e) => updateParcelRow(row.id, 'quantity', e.target.value)}
-                          className={getClassName(
-                            darkMode,
-                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
-                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
-                          )}
-                          required
-                        />
-                      </div>
-
-                      {/* Category */}
-                      <div className="flex flex-col">
-                        <label className={getClassName(
-                          darkMode,
-                          "text-xs font-medium mb-1 text-gray-400",
-                          "text-xs font-medium mb-1 text-gray-600"
-                        )}>
-                          Category
-                        </label>
-                        <select
-                          value={row.category}
-                          onChange={(e) => updateParcelRow(row.id, 'category', e.target.value)}
-                          className={getClassName(
-                            darkMode,
-                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
-                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
-                          )}
-                        >
-                          {COMPONENT_CATEGORY_OPTIONS.map((cat) => (
-                            <option key={cat.value} value={cat.value}>
-                              {cat.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Price */}
-                      <div className="flex flex-col">
-                        <label className={getClassName(
-                          darkMode,
-                          "text-xs font-medium mb-1 text-gray-400",
-                          "text-xs font-medium mb-1 text-gray-600"
-                        )}>
-                          Price per Unit
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={row.price}
-                          onChange={(e) => updateParcelRow(row.id, 'price', e.target.value)}
-                          className={getClassName(
-                            darkMode,
-                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
-                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
-                          )}
-                        />
-                      </div>
-
-                      {/* Shipping Mode */}
-                      <div className="flex flex-col">
-                        <label className={getClassName(
-                          darkMode,
-                          "text-xs font-medium mb-1 text-gray-400",
-                          "text-xs font-medium mb-1 text-gray-600"
-                        )}>
-                          Shipping Mode
-                        </label>
-                        <input
-                          type="text"
-                          value={row.shippingMode}
-                          onChange={(e) => updateParcelRow(row.id, 'shippingMode', e.target.value)}
-                          className={getClassName(
-                            darkMode,
-                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
-                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
-                          )}
-                        />
-                      </div>
-
-                      {/* Client Name */}
-                      <div className="flex flex-col">
-                        <label className={getClassName(
-                          darkMode,
-                          "text-xs font-medium mb-1 text-gray-400",
-                          "text-xs font-medium mb-1 text-gray-600"
-                        )}>
-                          Client Name
-                        </label>
-                        <input
-                          type="text"
-                          value={row.clientName}
-                          onChange={(e) => updateParcelRow(row.id, 'clientName', e.target.value)}
-                          className={getClassName(
-                            darkMode,
-                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
-                            "border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
-                          )}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Total Price Display */}
-              <div className="mb-6 p-4 rounded-lg border">
-                <div className="flex justify-between items-center">
-                  <span className={getClassName(
-                    darkMode,
-                    "text-lg font-semibold text-white",
-                    "text-lg font-semibold text-gray-900"
-                  )}>
-                    Total Price:
-                  </span>
-                  <span className={getClassName(
-                    darkMode,
-                    "text-xl font-bold text-green-400",
-                    "text-xl font-bold text-green-600"
-                  )}>
-                    ₱{calculateTotalPrice().toFixed(2)}
-                  </span>
+                    <Package className="w-4 h-4" /> Category
+                  </label>
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className={`border rounded-lg px-4 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
+                      darkMode
+                        ? "border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white"
+                        : "border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                    }`}
+                    required
+                  >
+                    {CATEGORY_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label
+                    className={`text-sm font-medium mb-2 ${
+                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
+                    }`}
+                  >
+                    Shipping Mode
+                  </label>
+                  <input
+                    type="text"
+                    value={shippingMode}
+                    onChange={(e) => setShippingMode(e.target.value)}
+                    placeholder="Shopee (J&T)"
+                    className={`border rounded-lg px-4 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
+                      darkMode
+                        ? "border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white"
+                        : "border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                    }`}
+                  />
+                  <p
+                    className={`text-xs mt-1 ${
+                      darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"
+                    }`}
+                  >
+                    Display Price: ₱{computedTotalPrice.toLocaleString()}
+                  </p>
+                </div>
+                <div>
+                  <label
+                    className={`text-sm font-medium mb-2 ${
+                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
+                    }`}
+                  >
+                    Client Name
+                  </label>
+                  <input
+                    type="text"
+                    value={clientName}
+                    onChange={(e) => setClientName(e.target.value)}
+                    placeholder="Client name"
+                    className={`border rounded-lg px-4 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
+                      darkMode
+                        ? "border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white"
+                        : "border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                    }`}
+                  />
+                </div>
+                <div>
+                  <label
+                    className={`text-sm font-medium mb-2 ${
+                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
+                    }`}
+                  >
+                    Price
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    placeholder="0.00"
+                    className={`border rounded-lg px-4 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
+                      darkMode
+                        ? "border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white"
+                        : "border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                    }`}
+                  />
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex justify-end gap-3">
+              <div className="flex justify-end items-center gap-3 mt-6">
                 <button
                   type="button"
-                  onClick={addParcelRow}
-                  className={getClassName(
-                    darkMode,
-                    "inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors",
-                    "inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-                  )}
+                  onClick={() => setShowMultipleInput(true)}
+                  className="bg-[#22C55E] hover:bg-[#16A34A] text-white px-5 py-2.5 rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg"
                 >
-                  <Plus className="w-4 h-4" /> Add Item Row
+                  <Plus className="w-5 h-5" /> Multiple Items
                 </button>
                 <button
                   type="submit"
-                  className={getClassName(
-                    darkMode,
-                    "inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-medium transition-colors",
-                    "inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-black px-6 py-2.5 rounded-lg font-medium transition-colors"
-                  )}
+                  className="bg-[#1E3A8A] hover:bg-[#1D4ED8] text-white px-6 py-2.5 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg"
                 >
-                  <Plus className="w-5 h-5" /> In {parcelRows.length} {parcelRows.length === 1 ? 'Item' : 'Items'}
+                  <Plus className="w-5 h-5" /> Add Item
                 </button>
               </div>
             </form>
+            )}
+
+            {showMultipleInput && (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  await handleBulkSubmit();
+                }}
+                className={`p-6 rounded-xl shadow-lg mb-8 border transition animate__animated animate__fadeInUp animate__faster ${
+                  darkMode
+                    ? "bg-[#1F2937] border-[#374151] text-white"
+                    : "bg-white border-[#E5E7EB] text-[#111827]"
+                }`}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+                  <h2 className="text-lg font-semibold">Multiple Stock In</h2>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowMultipleInput(false)}
+                      className="px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 bg-[#22C55E] hover:bg-[#16A34A] text-white shadow-sm hover:shadow-md"
+                    >
+                      Back to Single Input
+                    </button>
+                    <button
+                      type="button"
+                      onClick={addRow}
+                      className="bg-[#1E3A8A] hover:bg-[#1D4ED8] text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2"
+                    >
+                      <Plus className="w-4 h-4" /> Add Row
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  {bulkRows.map((row, index) => (
+                    <StockInBulkRow
+                      key={`stock-in-row-${index}`}
+                      row={row}
+                      index={index}
+                      onChange={updateRow}
+                      onRemove={removeRow}
+                      darkMode={darkMode}
+                    />
+                  ))}
+                </div>
+
+                {bulkError && (
+                  <p className="mt-4 text-sm font-medium text-[#DC2626]">{bulkError}</p>
+                )}
+                {bulkMessage && (
+                  <p className="mt-4 text-sm font-medium text-[#16A34A]">{bulkMessage}</p>
+                )}
+
+                <div className="flex justify-end mt-6">
+                  <button
+                    type="submit"
+                    className="bg-[#1E3A8A] hover:bg-[#1D4ED8] text-white px-6 py-2.5 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg"
+                  >
+                    <Plus className="w-5 h-5" /> Submit Multiple Items
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {isAdmin && (
+              <div
+                className={`rounded-xl shadow-xl overflow-hidden border mb-4 ${
+                  darkMode
+                    ? "bg-[#1F2937] border-[#374151]"
+                    : "bg-white border-[#E5E7EB]"
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setShowStockInHistory((prev) => !prev)}
+                  className={`w-full text-left px-4 py-3 text-sm font-semibold uppercase tracking-wide ${
+                    darkMode
+                      ? "bg-[#111827] text-[#D1D5DB] hover:bg-[#1F2937]"
+                      : "bg-[#F9FAFB] text-[#374151] hover:bg-[#F3F4F6]"
+                  }`}
+                >
+                  {showStockInHistory ? "hide" : "show"}
+                </button>
+              </div>
+            )}
+
+            {isAdmin && showStockInHistory && (
+            <>
+            {/* Stats */}
+            <div
+              className={`mb-6 flex justify-between p-4 rounded-lg shadow animate__animated animate__fadeInUp animate__fast ${
+                darkMode
+                  ? "bg-[#1F2937] text-white border border-[#374151]"
+                  : "bg-white text-[#111827] border border-[#E5E7EB]"
+              }`}
+            >
+              <div className="font-medium">
+                Unique Items: <span className="font-bold">{uniqueItemCount}</span>
+              </div>
+              <div className="font-medium">
+                Total Records: <span className="font-bold">{items.length}</span>
+              </div>
+              <div className="font-medium">
+                Total Quantity:{" "}
+                <span className="font-bold">
+                  {items.reduce((sum, item) => sum + Number(item.quantity), 0)}
+                </span>
+              </div>
+            </div>
 
             {/* Table */}
             <div
@@ -809,18 +832,27 @@ export default function Page() {
                 Page {currentPage} of {totalPages}
               </span>
 
-              <button
-                onClick={goToNextPage}
-                disabled={currentPage === totalPages}
-                className={`p-2 rounded-lg border transition-colors ${
-                  darkMode
-                    ? "border-[#374151] bg-[#1F2937] text-white hover:bg-[#374151] disabled:opacity-50 disabled:cursor-not-allowed"
-                    : "border-[#D1D5DB] bg-white text-[#374151] hover:bg-[#F3F4F6] disabled:opacity-50 disabled:cursor-not-allowed"
-                }`}
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
+                    <button
+                      onClick={goToNextPage}
+                      disabled={currentPage === totalPages}
+                      className={`p-2 rounded-lg transition-all ${
+                        currentPage === totalPages
+                          ? darkMode
+                            ? "bg-[#374151] text-[#6B7280] cursor-not-allowed"
+                            : "bg-[#F3F4F6] text-[#9CA3AF] cursor-not-allowed"
+                          : darkMode
+                            ? "bg-[#374151] text-[#D1D5DB] hover:bg-[#4B5563]"
+                            : "bg-[#F3F4F6] text-[#374151] hover:bg-[#E5E7EB]"
+                      }`}
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
+            </>
+            )}
           </div>
         </main>
       </div>

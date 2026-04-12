@@ -8,7 +8,6 @@ import {
   PackageOpen,
   Settings,
   ShieldCheck,
-  AlertTriangle,
 } from "lucide-react";
 
 export const SIDEBAR_ICON_MAP = {
@@ -21,7 +20,6 @@ export const SIDEBAR_ICON_MAP = {
   PackageOpen,
   Settings,
   ShieldCheck,
-  AlertTriangle,
 };
 
 export const SIDEBAR_ICON_OPTIONS = Object.keys(SIDEBAR_ICON_MAP).sort((a, b) =>
@@ -71,12 +69,6 @@ export const DEFAULT_ADMIN_SIDEBAR_ITEMS = [
     iconKey: "Activity",
     path: "/view/out-of-stock",
   },
-  {
-    id: "Defective Items",
-    label: "Defective Items",
-    iconKey: "AlertTriangle",
-    path: "/view/defective-items",
-  },
 ];
 
 export const DEFAULT_STAFF_SIDEBAR_ITEMS = [
@@ -91,16 +83,6 @@ export const DEFAULT_STAFF_SIDEBAR_ITEMS = [
     label: "Item Transfer",
     iconKey: "ArrowLeftRight",
     path: "/view/item-transfer",
-  },
-<<<<<<< Updated upstream
-    {
-=======
-  {
->>>>>>> Stashed changes
-    id: "Defective Items",
-    label: "Defective Items",
-    iconKey: "AlertTriangle",
-    path: "/view/defective-items",
   },
 ];
 

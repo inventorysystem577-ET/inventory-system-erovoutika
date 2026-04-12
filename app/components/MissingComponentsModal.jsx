@@ -17,6 +17,9 @@ const MissingComponentsModal = ({
   darkMode,
   onAddToStockIn,
   isAdding,
+  onRetryProductIn,
+  hasPendingProductIn,
+  isRetryingProductIn,
 }) => {
   const today = useMemo(() => getLocalDate(), []);
   const [date, setDate] = useState(today);
@@ -103,6 +106,10 @@ const MissingComponentsModal = ({
             : Number(prices[item.component]),
       });
     }
+
+      if (hasPendingProductIn && onRetryProductIn) {
+        await onRetryProductIn();
+      }
   };
 
   const addAlternativeRow = () => {
@@ -136,6 +143,10 @@ const MissingComponentsModal = ({
   const addAllAlternativesToStockIn = async () => {
     for (const row of alternativeRows) {
       await addAlternativeToStockIn(row);
+    }
+
+    if (hasPendingProductIn && onRetryProductIn) {
+      await onRetryProductIn();
     }
   };
 
@@ -348,14 +359,26 @@ const MissingComponentsModal = ({
           </div>
 
           <div className="flex justify-end mt-4">
-            <button
-              type="button"
-              onClick={addAll}
-              disabled={isAdding}
-              className="px-4 py-2 rounded-lg bg-[#16A34A] hover:bg-[#15803D] text-white text-sm disabled:opacity-50"
-            >
-              Add All Missing to Stock In
-            </button>
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={addAll}
+                disabled={isAdding}
+                className="px-4 py-2 rounded-lg bg-[#16A34A] hover:bg-[#15803D] text-white text-sm disabled:opacity-50"
+              >
+                Add All Missing to Stock In
+              </button>
+              {hasPendingProductIn && (
+                <button
+                  type="button"
+                  onClick={onRetryProductIn}
+                  disabled={isAdding || isRetryingProductIn}
+                  className="px-4 py-2 rounded-lg bg-[#1E3A8A] hover:bg-[#1D4ED8] text-white text-sm disabled:opacity-50"
+                >
+                  {isRetryingProductIn ? "Retrying Product In..." : "Retry Product In"}
+                </button>
+              )}
+            </div>
           </div>
 
           <div
