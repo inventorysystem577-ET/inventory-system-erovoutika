@@ -92,7 +92,11 @@ export const DEFAULT_STAFF_SIDEBAR_ITEMS = [
     iconKey: "ArrowLeftRight",
     path: "/view/item-transfer",
   },
+<<<<<<< Updated upstream
     {
+=======
+  {
+>>>>>>> Stashed changes
     id: "Defective Items",
     label: "Defective Items",
     iconKey: "AlertTriangle",
