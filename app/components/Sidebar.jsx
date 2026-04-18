@@ -9,6 +9,7 @@ import {
   ArrowDownToLine,
   ArrowUpFromLine,
   ArrowLeftRight,
+  AlertTriangle,
 } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 import { handleLogout } from "../controller/logoutController";
@@ -71,6 +72,12 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen, darkMode }) {
       label: "Inventory",
       icon: Activity,
       path: "/view/out-of-stock",
+    },
+    {
+      id: "Defective Items",
+      label: "Defective Items",
+      icon: AlertTriangle,
+      path: "/view/defective-items",
     },
   ];
 

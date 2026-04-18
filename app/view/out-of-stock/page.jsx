@@ -55,11 +55,15 @@ import {
 } from "../../utils/inventoryMeta";
 import {
   CATEGORIES,
-  CATEGORY_OPTIONS,
   PRODUCT_CATEGORIES,
-  PRODUCT_CATEGORY_OPTIONS,
   getCategoryColor,
   getCategoryIcon,
+  getAllStockCategories,
+  getAllProductCategories,
+  addCustomStockCategory,
+  addCustomProductCategory,
+  deleteCustomStockCategory,
+  deleteCustomProductCategory,
 } from "../../utils/categoryUtils";
 import {
   addParcelInItem,
@@ -158,6 +162,14 @@ export default function Page() {
   const [thresholdTarget, setThresholdTarget] = useState(null);
   const [itemThresholds, setItemThresholds] = useState({});
   const [isThresholdsHydrated, setIsThresholdsHydrated] = useState(false);
+  
+  // Custom categories state
+  const [stockCategories, setStockCategories] = useState(getAllStockCategories());
+  const [productCategories, setProductCategories] = useState(getAllProductCategories());
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [categoryModalType, setCategoryModalType] = useState("stock"); // "stock" or "product"
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryIcon, setNewCategoryIcon] = useState("📦");
 
   const DESCRIPTION_TRUNCATE_LIMIT = 140;
   const truncateText = (value, maxLength) => {
@@ -338,6 +350,48 @@ export default function Page() {
     setShowHistoryModal(false);
     setHistoryTarget(null);
     setTimeframePreview(null);
+  };
+
+  // Category management functions
+  const openCategoryModal = (type) => {
+    setCategoryModalType(type);
+    setShowCategoryModal(true);
+    setNewCategoryName("");
+    setNewCategoryIcon("📦");
+  };
+
+  const closeCategoryModal = () => {
+    setShowCategoryModal(false);
+    setNewCategoryName("");
+    setNewCategoryIcon("📦");
+  };
+
+  const handleAddCategory = () => {
+    if (!newCategoryName.trim()) {
+      alert("Category name is required");
+      return;
+    }
+    
+    if (categoryModalType === "stock") {
+      addCustomStockCategory(newCategoryName.trim(), newCategoryIcon);
+      setStockCategories(getAllStockCategories());
+    } else {
+      addCustomProductCategory(newCategoryName.trim(), newCategoryIcon);
+      setProductCategories(getAllProductCategories());
+    }
+    
+    setNewCategoryName("");
+    setNewCategoryIcon("📦");
+  };
+
+  const handleDeleteCategory = (categoryName) => {
+    if (categoryModalType === "stock") {
+      deleteCustomStockCategory(categoryName);
+      setStockCategories(getAllStockCategories());
+    } else {
+      deleteCustomProductCategory(categoryName);
+      setProductCategories(getAllProductCategories());
+    }
   };
 
   const loadItems = async () => {
@@ -1520,13 +1574,27 @@ export default function Page() {
                     className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm ${darkMode ? "border-[#374151] focus:ring-[#a78bfa] focus:border-[#a78bfa] bg-[#111827] text-white" : "border-[#D1D5DB] focus:ring-[#1e40af] focus:border-[#1e40af] bg-white text-black"}`}
                   >
                     <option value="all">All Categories</option>
-                    {CATEGORY_OPTIONS.map((cat) => (
+                    {stockCategories.map((cat) => (
                       <option key={cat.value} value={cat.value}>
                         {cat.label}
                       </option>
                     ))}
                   </select>
                 </div>
+                {isAdmin && (
+                  <div className="flex items-end">
+                    <button
+                      onClick={() => openCategoryModal("stock")}
+                      className={`w-full px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                        darkMode
+                          ? "bg-[#374151] text-gray-300 hover:bg-[#4B5563]"
+                          : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                      }`}
+                    >
+                      + Manage Categories
+                    </button>
+                  </div>
+                )}
                 <div>
                   <label
                     className={`block text-sm font-medium mb-2 ${darkMode ? "text-gray-300" : "text-gray-700"}`}
@@ -1730,12 +1798,12 @@ export default function Page() {
                                     }`}
                                     aria-label="Transfer category"
                                   >
-                                    {CATEGORY_OPTIONS.map((option) => (
+                                    {stockCategories.map((option) => (
                                       <option
                                         key={option.value}
                                         value={option.value}
                                       >
-                                        {option.value}
+                                        {option.label}
                                       </option>
                                     ))}
                                   </select>
@@ -2052,13 +2120,27 @@ export default function Page() {
                     className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm ${darkMode ? "border-[#374151] focus:ring-[#a78bfa] focus:border-[#a78bfa] bg-[#111827] text-white" : "border-[#D1D5DB] focus:ring-[#7c3aed] focus:border-[#7c3aed] bg-white text-black"}`}
                   >
                     <option value="all">All Categories</option>
-                    {PRODUCT_CATEGORY_OPTIONS.map((cat) => (
+                    {productCategories.map((cat) => (
                       <option key={cat.value} value={cat.value}>
                         {cat.label}
                       </option>
                     ))}
                   </select>
                 </div>
+                {isAdmin && (
+                  <div className="flex items-end">
+                    <button
+                      onClick={() => openCategoryModal("product")}
+                      className={`w-full px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                        darkMode
+                          ? "bg-[#374151] text-gray-300 hover:bg-[#4B5563]"
+                          : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                      }`}
+                    >
+                      + Manage Categories
+                    </button>
+                  </div>
+                )}
                 <div>
                   <label
                     className={`block text-sm font-medium mb-2 ${darkMode ? "text-gray-300" : "text-gray-700"}`}
@@ -2332,12 +2414,12 @@ export default function Page() {
                                     }`}
                                     aria-label="Transfer category"
                                   >
-                                    {PRODUCT_CATEGORY_OPTIONS.map((option) => (
+                                    {productCategories.map((option) => (
                                       <option
                                         key={option.value}
                                         value={option.value}
                                       >
-                                        {option.value}
+                                        {option.label}
                                       </option>
                                     ))}
                                   </select>
@@ -2904,6 +2986,128 @@ export default function Page() {
                   Cancel
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ============= CATEGORY MANAGEMENT MODAL ============= */}
+        {showCategoryModal && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+              onClick={closeCategoryModal}
+            />
+            <div
+              className={`relative z-10 w-full max-w-md rounded-2xl border shadow-2xl p-6 max-h-[80vh] overflow-y-auto ${
+                darkMode
+                  ? "bg-[#1F2937] border-[#374151] text-white"
+                  : "bg-white border-[#E5E7EB] text-black"
+              }`}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 rounded-lg bg-blue-500/10">
+                  <span className="text-xl">📁</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold">
+                    Manage {categoryModalType === "stock" ? "Stock" : "Product"} Categories
+                  </h3>
+                  <p className={`text-xs ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+                    Add or remove custom categories
+                  </p>
+                </div>
+              </div>
+
+              {/* Add New Category */}
+              <div className="mb-6">
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
+                  Add New Category:
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    placeholder="Category name (e.g., Electronics)"
+                    className={`flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
+                      darkMode
+                        ? "border-[#374151] bg-[#111827] text-white focus:ring-blue-500"
+                        : "border-[#D1D5DB] bg-white text-black focus:ring-blue-500"
+                    }`}
+                  />
+                  <select
+                    value={newCategoryIcon}
+                    onChange={(e) => setNewCategoryIcon(e.target.value)}
+                    className={`border rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 ${
+                      darkMode
+                        ? "border-[#374151] bg-[#111827] text-white focus:ring-blue-500"
+                        : "border-[#D1D5DB] bg-white text-black focus:ring-blue-500"
+                    }`}
+                  >
+                    <option value="📦">📦</option>
+                    <option value="⚡">⚡</option>
+                    <option value="🔧">🔧</option>
+                    <option value="💻">💻</option>
+                    <option value="📱">📱</option>
+                    <option value="🔌">🔌</option>
+                    <option value="🤖">🤖</option>
+                    <option value="🚤">🚤</option>
+                    <option value="🛸">🛸</option>
+                    <option value="📋">📋</option>
+                  </select>
+                  <button
+                    onClick={handleAddCategory}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+
+              {/* Existing Categories */}
+              <div>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
+                  Current Categories:
+                </label>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {(categoryModalType === "stock" ? stockCategories : productCategories).map((cat) => {
+                    const isDefault = ["Component", "Product", "Tool", "Others", "EROV PRODUCT", "JSUMO PRODUCT", "ZM ROBO PRODUCT", "OTHER"].includes(cat.value);
+                    return (
+                      <div
+                        key={cat.value}
+                        className={`flex items-center justify-between p-2 rounded-lg ${
+                          darkMode ? "bg-[#374151]" : "bg-gray-100"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span>{cat.icon || "📦"}</span>
+                          <span className="text-sm">{cat.label}</span>
+                        </div>
+                        {!isDefault && (
+                          <button
+                            onClick={() => handleDeleteCategory(cat.value)}
+                            className="text-red-500 hover:text-red-700 text-sm"
+                            title="Delete category"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <button
+                onClick={closeCategoryModal}
+                className={`mt-6 w-full py-2.5 rounded-xl text-sm font-medium transition ${
+                  darkMode
+                    ? "bg-[#374151] hover:bg-[#4B5563] text-gray-300"
+                    : "bg-gray-100 hover:bg-gray-200 text-gray-600"
+                }`}
+              >
+                Close
+              </button>
             </div>
           </div>
         )}

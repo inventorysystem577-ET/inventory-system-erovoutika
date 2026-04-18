@@ -1,7 +1,7 @@
-/* eslint-disable react-hooks/rules-of-hooks */
 "use client";
+/* eslint-disable react-hooks/rules-of-hooks */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import AuthGuard from "../../components/AuthGuard";
 import TopNavbar from "../../components/TopNavbar";
 import Sidebar from "../../components/Sidebar";
@@ -9,6 +9,7 @@ import { logActivity } from "../../utils/logActivity";
 import { useSearchParams } from "next/navigation";
 import {
   PackageCheck,
+  PackageOpen,
   Plus,
   Clock,
   Calendar,
@@ -22,7 +23,6 @@ import {
   handleAddParcelIn,
   updateParcelInItemHelper,
 } from "../../utils/parcelShippedHelper";
-import AuthGuard from "../../components/AuthGuard";
 import { useAuth } from "../../hook/useAuth";
 import { isAdminRole } from "../../utils/roleHelper";
 import useBulkStockInForm from "../../hook/useBulkStockInForm";
@@ -31,7 +31,7 @@ import { products } from "../../utils/productsData";
 import { CATEGORIES, CATEGORY_OPTIONS, getCategoryColor, getCategoryIcon } from "../../utils/categoryUtils";
 import { buildProductCode } from "../../utils/inventoryMeta";
 
-export default function Page() {
+function PageContent() {
   const searchParams = useSearchParams();
   const itemParam = searchParams.get("item");
 
@@ -63,10 +63,15 @@ export default function Page() {
   const [price, setPrice] = useState("");
   const [category, setCategory] = useState(CATEGORIES.OTHERS);
   const [itemSuggestions, setItemSuggestions] = useState([]);
-  const computedTotalPrice = (Number(price) || 0) * (Number(quantity) || 0);
+  // Calculate total price from all parcel rows
+  const computedTotalPrice = parcelRows.reduce((total, row) => {
+    return total + (Number(row.price) || 0) * (Number(row.quantity) || 0);
+  }, 0);
   const [isUpdatingCategoryId, setIsUpdatingCategoryId] = useState(null);
   const [showStockInHistory, setShowStockInHistory] = useState(false);
   const [showMultipleInput, setShowMultipleInput] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(5);
   const { role, displayName, userEmail } = useAuth();
   const isAdmin = isAdminRole(role);
 
@@ -848,14 +853,19 @@ export default function Page() {
                       <ChevronRight className="w-5 h-5" />
                     </button>
                   </div>
-                </div>
-              )}
-            </div>
             </>
-            )}
+              )}
           </div>
         </main>
       </div>
     </AuthGuard>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading...</div>}>
+      <PageContent />
+    </Suspense>
   );
 }

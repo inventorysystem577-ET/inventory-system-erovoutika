@@ -6,10 +6,18 @@ const APPROVED_USERS_TABLE = "user_profiles";
 
 // ── Supabase Admin client (needed for deleteUser from Auth) ──
 // Make sure SUPABASE_SERVICE_ROLE_KEY is in your .env.local
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-);
+let supabaseAdminInstance = null;
+const getSupabaseAdmin = () => {
+  if (!supabaseAdminInstance) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || !key) {
+      throw new Error('Missing Supabase admin credentials. Please check your .env file.');
+    }
+    supabaseAdminInstance = createClient(url, key);
+  }
+  return supabaseAdminInstance;
+};
 
 const normalizeStatus = (status, fallback = "approved") => {
   if (!status) return fallback;
@@ -160,13 +168,13 @@ export async function getAllUsers({
   status = "approved",
 } = {}) {
   if (status === "approved") {
-    let approvedProfilesQuery = supabaseAdmin
+    let approvedProfilesQuery = getSupabaseAdmin()
       .from(APPROVED_USERS_TABLE)
       .select("id, name, email, role, approved_at, approved_by")
       .eq("is_approved", true)
       .order("name", { ascending: true });
 
-    let approvedRequestsQuery = supabaseAdmin
+    let approvedRequestsQuery = getSupabaseAdmin()
       .from(PENDING_REQUESTS_TABLE)
       .select("id, name, email, role, approved_at, approved_by")
       .eq("is_approved", true)
@@ -217,14 +225,14 @@ export async function getAllUsers({
   let query;
 
   if (status === "pending") {
-    query = supabaseAdmin
+    query = getSupabaseAdmin()
       .from(PENDING_REQUESTS_TABLE)
       .select("id, name, email, role, reason, requested_at")
       .eq("is_approved", false)
       .is("rejected_at", null)
       .order("requested_at", { ascending: true });
   } else if (status === "denied") {
-    query = supabaseAdmin
+    query = getSupabaseAdmin()
       .from(PENDING_REQUESTS_TABLE)
       .select(
         "id, name, email, role, reason, requested_at, rejected_at, rejected_by",
@@ -246,7 +254,7 @@ export async function getAllUsers({
 export async function updateUserProfile(id, { name, role }) {
   const now = new Date().toISOString();
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await getSupabaseAdmin()
     .from(APPROVED_USERS_TABLE)
     .update({ name, role, updated_at: now })
     .eq("id", id)
@@ -259,7 +267,7 @@ export async function updateUserProfile(id, { name, role }) {
 
 export async function deleteUserProfile(id) {
   // 1. Remove from user_profiles
-  const { error: profileError } = await supabaseAdmin
+  const { error: profileError } = await getSupabaseAdmin()
     .from(APPROVED_USERS_TABLE)
     .delete()
     .eq("id", id);
@@ -267,7 +275,7 @@ export async function deleteUserProfile(id) {
   if (profileError) throw new Error(profileError.message);
 
   // 2. Remove from Supabase Auth — non-blocking if already gone
-  const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(id);
+  const { error: authError } = await getSupabaseAdmin().auth.admin.deleteUser(id);
   if (authError)
     console.warn(`Could not delete auth user ${id}:`, authError.message);
 }
@@ -275,7 +283,7 @@ export async function deleteUserProfile(id) {
 export async function approveAccessRequest(requestId, approvedBy) {
   const now = new Date().toISOString();
 
-  const { error } = await supabaseAdmin
+  const { error } = await getSupabaseAdmin()
     .from(PENDING_REQUESTS_TABLE)
     .update({
       is_approved: true,
@@ -295,7 +303,7 @@ export async function approveAccessRequest(requestId, approvedBy) {
 export async function rejectAccessRequest(requestId, rejectedBy) {
   const now = new Date().toISOString();
 
-  const { error } = await supabaseAdmin
+  const { error } = await getSupabaseAdmin()
     .from(PENDING_REQUESTS_TABLE)
     .update({
       is_approved: false,

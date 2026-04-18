@@ -1,5 +1,5 @@
-/* eslint-disable react-hooks/rules-of-hooks */
 "use client";
+/* eslint-disable react-hooks/rules-of-hooks */
 
 import React, { useState, useEffect } from "react";
 import AuthGuard from "../../components/AuthGuard";
@@ -959,4 +959,5 @@ setAvailableItems(aggregateAvailableItems(result.updatedIn || []));
       </div>
     </AuthGuard>
   );
+}
 }

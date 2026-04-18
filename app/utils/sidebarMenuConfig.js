@@ -1,5 +1,6 @@
 import {
   Activity,
+  AlertTriangle,
   ArrowDownToLine,
   ArrowLeftRight,
   ArrowUpFromLine,
@@ -12,6 +13,7 @@ import {
 
 export const SIDEBAR_ICON_MAP = {
   Activity,
+  AlertTriangle,
   ArrowDownToLine,
   ArrowLeftRight,
   ArrowUpFromLine,
@@ -69,6 +71,12 @@ export const DEFAULT_ADMIN_SIDEBAR_ITEMS = [
     iconKey: "Activity",
     path: "/view/out-of-stock",
   },
+  {
+    id: "Defective Items",
+    label: "Defective Items",
+    iconKey: "AlertTriangle",
+    path: "/view/defective-items",
+  },
 ];
 
 export const DEFAULT_STAFF_SIDEBAR_ITEMS = [
@@ -83,6 +91,12 @@ export const DEFAULT_STAFF_SIDEBAR_ITEMS = [
     label: "Item Transfer",
     iconKey: "ArrowLeftRight",
     path: "/view/item-transfer",
+  },
+  {
+    id: "Defective Items",
+    label: "Defective Items",
+    iconKey: "AlertTriangle",
+    path: "/view/defective-items",
   },
 ];
 
