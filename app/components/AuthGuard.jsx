@@ -9,8 +9,8 @@ import { isAdminRole } from "../utils/roleHelper";
 const STAFF_ALLOWED_PATHS = [
   "/view/product-in",
   "/view/item-transfer",
-  "/view/parcel-shipped",
-  "/view/out-of-stock",
+  "/view/stock-in",
+  "/view/inventory",
   "/view/dashboard",
 ];
 

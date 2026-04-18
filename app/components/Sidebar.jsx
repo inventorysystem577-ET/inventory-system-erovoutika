@@ -49,7 +49,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen, darkMode }) {
       id: "Parcel Shipped",
       label: "Stock In",
       icon: Package,
-      path: "/view/parcel-shipped",
+      path: "/view/stock-in",
     },
     ...(isAdmin
       ? [
@@ -57,7 +57,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen, darkMode }) {
             id: "Parcel Delivery",
             label: "Stock Out",
             icon: PackageOpen,
-            path: "/view/parcel-delivery",
+            path: "/view/stock-out",
           },
         ]
       : []),
@@ -71,7 +71,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen, darkMode }) {
       id: "Inventory Stock",
       label: "Inventory",
       icon: Activity,
-      path: "/view/out-of-stock",
+      path: "/view/inventory",
     },
     {
       id: "Defective Items",

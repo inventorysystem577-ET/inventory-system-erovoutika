@@ -57,19 +57,19 @@ export const DEFAULT_ADMIN_SIDEBAR_ITEMS = [
     id: "Parcel Shipped",
     label: "Components Stock In",
     iconKey: "Package",
-    path: "/view/parcel-shipped",
+    path: "/view/stock-in",
   },
   {
     id: "Parcel Delivery",
     label: "Components Stock Out",
     iconKey: "PackageOpen",
-    path: "/view/parcel-delivery",
+    path: "/view/stock-out",
   },
   {
     id: "Inventory Stock",
     label: "Inventory",
     iconKey: "Activity",
-    path: "/view/out-of-stock",
+    path: "/view/inventory",
   },
   {
     id: "Defective Items",

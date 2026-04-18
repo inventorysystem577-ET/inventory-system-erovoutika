@@ -211,7 +211,7 @@ export default function AdminPanelPage() {
     {
       title: "System Inventory Status",
       description: "Manage inventory records and export/delete controls.",
-      path: "/view/out-of-stock",
+      path: "/view/inventory",
     },
     {
       title: "Product Management",

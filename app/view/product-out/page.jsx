@@ -777,7 +777,7 @@ export default function ProductOutPage() {
                   onClick={() => setShowMultipleOutInput(true)}
                   className="px-6 py-2.5 rounded-lg font-medium transition-all duration-200 bg-[#38b559] text-white hover:bg-[#42d469] shadow-md hover:shadow-lg flex items-center gap-2"
                 >
-                  <Plus className="w-5 h-5 text-[#3B82F6]" />
+                  <Plus className="w-5 h-5" />
                   Multiple Product OUT
                 </button>
                 <button
@@ -837,11 +837,7 @@ export default function ProductOutPage() {
                   <button
                     type="button"
                     onClick={addBulkOutRow}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium border transition ${
-                      darkMode
-                        ? "border-[#374151] hover:bg-[#374151]/60 text-[#D1D5DB]"
-                        : "border-[#E5E7EB] hover:bg-gray-50 text-[#374151]"
-                    }`}
+                    className="bg-[#1E3A8A] hover:bg-[#1D4ED8] text-white px-3 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-all duration-200"
                   >
                     <Plus className="w-4 h-4 inline-block mr-1" />
                     Add Row
@@ -1021,8 +1017,8 @@ export default function ProductOutPage() {
                   disabled={isBulkOutSubmitting || availableProducts.length === 0}
                   className={`px-6 py-2.5 rounded-lg font-medium flex items-center gap-2 shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                     darkMode
-                      ? "bg-[#38b559] hover:bg-[#42d469] text-white"
-                      : "bg-[#38b559] hover:bg-[#42d469] text-white"
+                      ? "bg-[#EF4444] hover:bg-[#DC2626] text-white"
+                      : "bg-[#EF4444] hover:bg-[#DC2626] text-white"
                   }`}
                 >
                   <Plus className="w-5 h-5" /> Add Multiple Product OUT

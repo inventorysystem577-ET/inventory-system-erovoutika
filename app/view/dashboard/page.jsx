@@ -317,7 +317,7 @@ export default function page() {
               }`}
             >
               <DashboardSummaryCard
-                onClick={() => handleCardClick("/view/parcel-shipped")}
+                onClick={() => handleCardClick("/view/stock-in")}
                 containerClassName="bg-gradient-to-br from-[#1e40af] to-[#1e3a8a]"
                 Icon={PackageCheck}
                 MetaIcon={Clock}
@@ -340,7 +340,7 @@ export default function page() {
               {isAdmin && (
                 <>
                   <DashboardSummaryCard
-                    onClick={() => handleCardClick("/view/parcel-delivery")}
+                    onClick={() => handleCardClick("/view/stock-out")}
                     containerClassName="bg-gradient-to-br from-[#ea580c] to-[#c2410c]"
                     Icon={PackageOpen}
                     MetaIcon={TrendingDown}
@@ -373,7 +373,7 @@ export default function page() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <DashboardStatusCard
                   onClick={() =>
-                    handleCardClick("/view/out-of-stock", "out", "parcel")
+                    handleCardClick("/view/inventory", "out", "parcel")
                   }
                   darkMode={darkMode}
                   Icon={XCircle}
@@ -387,7 +387,7 @@ export default function page() {
                 />
                 <DashboardStatusCard
                   onClick={() =>
-                    handleCardClick("/view/out-of-stock", "critical", "parcel")
+                    handleCardClick("/view/inventory", "critical", "parcel")
                   }
                   darkMode={darkMode}
                   Icon={AlertTriangle}
@@ -401,7 +401,7 @@ export default function page() {
                 />
                 <DashboardStatusCard
                   onClick={() =>
-                    handleCardClick("/view/out-of-stock", "low", "parcel")
+                    handleCardClick("/view/inventory", "low", "parcel")
                   }
                   darkMode={darkMode}
                   Icon={TrendingDown}
@@ -415,7 +415,7 @@ export default function page() {
                 />
                 <DashboardStatusCard
                   onClick={() =>
-                    handleCardClick("/view/out-of-stock", "available", "parcel")
+                    handleCardClick("/view/inventory", "available", "parcel")
                   }
                   darkMode={darkMode}
                   Icon={Box}
@@ -439,7 +439,7 @@ export default function page() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <DashboardStatusCard
                   onClick={() =>
-                    handleCardClick("/view/out-of-stock", "out", "product")
+                    handleCardClick("/view/inventory", "out", "product")
                   }
                   darkMode={darkMode}
                   Icon={XCircle}
@@ -453,7 +453,7 @@ export default function page() {
                 />
                 <DashboardStatusCard
                   onClick={() =>
-                    handleCardClick("/view/out-of-stock", "critical", "product")
+                    handleCardClick("/view/inventory", "critical", "product")
                   }
                   darkMode={darkMode}
                   Icon={AlertTriangle}
@@ -467,7 +467,7 @@ export default function page() {
                 />
                 <DashboardStatusCard
                   onClick={() =>
-                    handleCardClick("/view/out-of-stock", "low", "product")
+                    handleCardClick("/view/inventory", "low", "product")
                   }
                   darkMode={darkMode}
                   Icon={TrendingDown}
@@ -482,7 +482,7 @@ export default function page() {
                 <DashboardStatusCard
                   onClick={() =>
                     handleCardClick(
-                      "/view/out-of-stock",
+                      "/view/inventory",
                       "available",
                       "product",
                     )

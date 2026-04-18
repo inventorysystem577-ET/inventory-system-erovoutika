@@ -3,6 +3,7 @@
 
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import * as XLSX from "xlsx";
 
 import React, { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
@@ -1871,7 +1872,7 @@ export default function Page() {
                                 ) : null}
                                 {item.quantity === 0 ? (
                                   <Link
-                                    href={`/view/parcel-shipped?item=${encodeURIComponent(item.name)}`}
+                                    href={`/view/stock-in?item=${encodeURIComponent(item.name)}`}
                                   >
                                     <div className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded cursor-pointer w-fit">
                                       Add Stock

@@ -1365,12 +1365,9 @@ export default function ProductInPage() {
                   <button
                     type="button"
                     onClick={() => setShowMultipleInput(true)}
-                    className={`px-6 py-2.5 rounded-lg font-medium transition-all duration-200 ${
-                      darkMode
-                        ? "bg-[#374151] text-[#D1D5DB] hover:bg-[#4B5563]"
-                        : "bg-[#E5E7EB] text-[#374151] hover:bg-[#D1D5DB]"
-                    }`}
+                    className="bg-[#22C55E] hover:bg-[#16A34A] text-white px-6 py-2.5 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg"
                   >
+                    <Plus className="w-5 h-5" />
                     Multiple Product Input
                   </button>
                   <button
@@ -1408,12 +1405,9 @@ export default function ProductInPage() {
                   <button
                     type="button"
                     onClick={() => setShowMultipleInput(false)}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                      darkMode
-                        ? "bg-[#374151] text-[#D1D5DB] hover:bg-[#4B5563]"
-                        : "bg-[#E5E7EB] text-[#374151] hover:bg-[#D1D5DB]"
-                    }`}
+                    className="bg-[#22C55E] hover:bg-[#16A34A] text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-2 shadow-sm hover:shadow-md"
                   >
+                    <Plus className="w-4 h-4" />
                     Back to Single Product
                   </button>
                 </div>
