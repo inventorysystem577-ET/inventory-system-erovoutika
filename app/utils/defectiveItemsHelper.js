@@ -45,6 +45,7 @@ export const addDefectiveItem = async ({
       reason,
       date,
       category,
+      status: "defective", // default status
       createdAt: new Date().toISOString(),
     };
     
@@ -163,14 +164,82 @@ export const deleteDefectiveItem = async (recordId, restoreInventory = false) =>
   }
 };
 
+// Mark defective item as fixed and return to inventory
+export const markDefectiveItemAsFixed = async (recordId) => {
+  try {
+    const defectiveItems = getDefectiveItems();
+    const record = defectiveItems.find((item) => item.id === recordId);
+    
+    if (!record) {
+      return { success: false, error: "Record not found" };
+    }
+    
+    // Check if already fixed
+    if (record.status === "fixed") {
+      return { success: false, error: "Item is already marked as fixed" };
+    }
+    
+    // Update the record status to fixed
+    const updatedItems = defectiveItems.map((item) =>
+      item.id === recordId
+        ? { ...item, status: "fixed", fixedAt: new Date().toISOString() }
+        : item
+    );
+    saveDefectiveItems(updatedItems);
+    
+    // Restore inventory quantity
+    const { getParcelInItems, updateParcelInItem } = await import("../models/parcelShippedModel");
+    const inventoryResult = await getParcelInItems();
+    const inventoryItems = inventoryResult.data || [];
+    
+    if (inventoryResult.error) {
+      return { success: false, error: inventoryResult.error.message };
+    }
+    
+    const inventoryItem = inventoryItems.find(
+      (item) => (item.item_name || item.name)?.toLowerCase() === record.itemName.toLowerCase()
+    );
+    
+    if (inventoryItem) {
+      const currentQty = Number(inventoryItem.quantity) || 0;
+      const restoredQty = Number(record.quantity) || 0;
+      
+      await updateParcelInItem(inventoryItem.id, {
+        ...inventoryItem,
+        quantity: currentQty + restoredQty,
+      });
+      
+      return {
+        success: true,
+        message: `Item marked as fixed and ${restoredQty} units restored to inventory`,
+        restoredQty: restoredQty,
+        newTotalQty: currentQty + restoredQty,
+      };
+    }
+    
+    // If item not found in inventory, just mark as fixed without restoring
+    return {
+      success: true,
+      message: "Item marked as fixed (inventory item not found - quantity not restored)",
+      warning: "Original inventory item not found",
+    };
+  } catch (error) {
+    console.error("Error marking defective item as fixed:", error);
+    return { success: false, error: error.message };
+  }
+};
+
 // Get defective items statistics
 export const getDefectiveItemsStats = () => {
   const items = getDefectiveItems();
+  const activeItems = items.filter(item => item.status !== "fixed");
   return {
     totalRecords: items.length,
-    totalDefectiveQuantity: items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0),
-    uniqueItems: new Set(items.map((item) => item.itemName)).size,
-    byCategory: items.reduce((acc, item) => {
+    activeDefectiveCount: activeItems.length,
+    totalDefectiveQuantity: activeItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0),
+    fixedCount: items.filter(item => item.status === "fixed").length,
+    uniqueItems: new Set(activeItems.map((item) => item.itemName)).size,
+    byCategory: activeItems.reduce((acc, item) => {
       const cat = item.category || "Others";
       acc[cat] = (acc[cat] || 0) + (Number(item.quantity) || 0);
       return acc;

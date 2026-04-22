@@ -15,12 +15,14 @@ import {
   Calendar,
   Search,
   XCircle,
+  CheckCircle2,
 } from "lucide-react";
 import "animate.css";
 import {
   getDefectiveItems,
   addDefectiveItem,
   deleteDefectiveItem,
+  markDefectiveItemAsFixed,
   getDefectiveItemsStats,
 } from "../../utils/defectiveItemsHelper";
 import { fetchParcelItems } from "../../utils/parcelShippedHelper";
@@ -57,6 +59,9 @@ export default function Page() {
     totalDefectiveQuantity: 0,
     uniqueItems: 0,
   });
+  
+  // Marking fixed state
+  const [isMarkingFixed, setIsMarkingFixed] = useState(null);
 
   useEffect(() => {
     const savedDarkMode = localStorage.getItem("darkMode");
@@ -172,6 +177,34 @@ export default function Page() {
       await loadData();
     } else {
       alert(result.error || "Failed to delete record");
+    }
+  };
+
+  // Handle marking defective item as fixed
+  const handleMarkAsFixed = async (recordId) => {
+    const confirmed = window.confirm(
+      "Mark this item as fixed?\n\n" +
+      "This will return the quantity to inventory."
+    );
+    
+    if (!confirmed) return;
+    
+    setIsMarkingFixed(recordId);
+    
+    try {
+      const result = await markDefectiveItemAsFixed(recordId);
+      
+      if (result.success) {
+        alert(result.message);
+        await loadData();
+      } else {
+        alert(result.error || "Failed to mark item as fixed");
+      }
+    } catch (error) {
+      console.error("Error marking as fixed:", error);
+      alert("An error occurred while processing");
+    } finally {
+      setIsMarkingFixed(null);
     }
   };
 
@@ -594,6 +627,7 @@ export default function Page() {
                         "CATEGORY",
                         "QUANTITY",
                         "REASON",
+                        "STATUS",
                         "ACTIONS",
                       ].map((head) => (
                         <th
@@ -613,7 +647,7 @@ export default function Page() {
                     {currentRecords.length === 0 ? (
                       <tr>
                         <td
-                          colSpan="6"
+                          colSpan="7"
                           className={`text-center p-8 sm:p-12 ${
                             darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"
                           } animate__animated animate__fadeIn`}
@@ -685,18 +719,61 @@ export default function Page() {
                           >
                             {record.reason || "-"}
                           </td>
-                          <td className="p-3 sm:p-4 text-center align-middle">
-                            <button
-                              onClick={() => handleDeleteRecord(record.id)}
-                              className={`p-2 rounded-lg transition-all ${
+                          <td className="p-3 sm:p-4 text-sm whitespace-nowrap text-center align-middle">
+                            {record.status === "fixed" ? (
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${
                                 darkMode
-                                  ? "hover:bg-[#374151] text-[#9CA3AF] hover:text-[#EF4444]"
-                                  : "hover:bg-gray-100 text-gray-500 hover:text-red-600"
-                              }`}
-                              title="Delete record and restore inventory"
-                            >
-                              <Trash2 className="w-5 h-5" />
-                            </button>
+                                  ? "bg-green-500/20 text-green-400 border-green-500/30"
+                                  : "bg-green-100 text-green-700 border-green-200"
+                              }`}>
+                                <CheckCircle2 className="w-3 h-3 mr-1" />
+                                Fixed
+                              </span>
+                            ) : (
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${
+                                darkMode
+                                  ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/30"
+                                  : "bg-yellow-100 text-yellow-700 border-yellow-200"
+                              }`}>
+                                <AlertTriangle className="w-3 h-3 mr-1" />
+                                Defective
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-3 sm:p-4 text-center align-middle">
+                            <div className="flex items-center justify-center gap-2">
+                              {record.status !== "fixed" && (
+                                <button
+                                  onClick={() => handleMarkAsFixed(record.id)}
+                                  disabled={isMarkingFixed === record.id}
+                                  className={`p-2 rounded-lg transition-all ${
+                                    isMarkingFixed === record.id
+                                      ? "bg-gray-400 cursor-not-allowed text-white"
+                                      : darkMode
+                                        ? "hover:bg-green-900/30 text-green-400 hover:text-green-300"
+                                        : "hover:bg-green-100 text-green-600 hover:text-green-700"
+                                  }`}
+                                  title="Mark as fixed and return to inventory"
+                                >
+                                  {isMarkingFixed === record.id ? (
+                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                  ) : (
+                                    <CheckCircle2 className="w-5 h-5" />
+                                  )}
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleDeleteRecord(record.id)}
+                                className={`p-2 rounded-lg transition-all ${
+                                  darkMode
+                                    ? "hover:bg-[#374151] text-[#9CA3AF] hover:text-[#EF4444]"
+                                    : "hover:bg-gray-100 text-gray-500 hover:text-red-600"
+                                }`}
+                                title="Delete record and restore inventory"
+                              >
+                                <Trash2 className="w-5 h-5" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))

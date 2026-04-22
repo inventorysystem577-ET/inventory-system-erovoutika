@@ -32,6 +32,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Upload,
+  CheckCircle2,
+  Wrench,
 } from "lucide-react";
 import Link from "next/link";
 import "animate.css";
@@ -79,6 +81,11 @@ import {
   updateProductIn,
   deleteProductInByName,
 } from "../../models/productModel";
+import {
+  getDefectiveItems,
+  markDefectiveItemAsFixed,
+  getDefectiveItemsStats,
+} from "../../utils/defectiveItemsHelper";
 
 const DEFAULT_STOCK_THRESHOLDS = {
   critical: 5,
@@ -171,6 +178,14 @@ export default function Page() {
   const [categoryModalType, setCategoryModalType] = useState("stock"); // "stock" or "product"
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryIcon, setNewCategoryIcon] = useState("📦");
+
+  // Defective items state
+  const [defectiveItems, setDefectiveItems] = useState([]);
+  const [defectiveItemsStats, setDefectiveItemsStats] = useState({
+    activeDefectiveCount: 0,
+    totalDefectiveQuantity: 0,
+  });
+  const [isMarkingFixed, setIsMarkingFixed] = useState(null);
 
   const DESCRIPTION_TRUNCATE_LIMIT = 140;
   const truncateText = (value, maxLength) => {
@@ -406,10 +421,49 @@ export default function Page() {
     setProductOutItems(productOutData || []);
   };
 
+  // Load defective items
+  const loadDefectiveItems = () => {
+    const items = getDefectiveItems();
+    // Filter out fixed items for display
+    const activeItems = items.filter(item => item.status !== "fixed");
+    setDefectiveItems(activeItems);
+    setDefectiveItemsStats(getDefectiveItemsStats());
+  };
+
+  // Handle marking defective item as fixed
+  const handleMarkAsFixed = async (recordId) => {
+    const confirmed = window.confirm(
+      "Mark this item as fixed?\n\n" +
+      "This will return the quantity to inventory."
+    );
+    
+    if (!confirmed) return;
+    
+    setIsMarkingFixed(recordId);
+    
+    try {
+      const result = await markDefectiveItemAsFixed(recordId);
+      
+      if (result.success) {
+        alert(result.message);
+        loadDefectiveItems();
+        loadItems(); // Reload inventory to show updated quantities
+      } else {
+        alert(result.error || "Failed to mark item as fixed");
+      }
+    } catch (error) {
+      console.error("Error marking as fixed:", error);
+      alert("An error occurred while processing");
+    } finally {
+      setIsMarkingFixed(null);
+    }
+  };
+
   useEffect(() => {
     const savedDarkMode = localStorage.getItem("darkMode");
     if (savedDarkMode !== null) setDarkMode(savedDarkMode === "true");
     loadItems();
+    loadDefectiveItems();
   }, []);
 
   useEffect(() => {
@@ -2626,6 +2680,125 @@ export default function Page() {
           onSave={saveThresholdForTarget}
           onReset={resetThresholdForTarget}
         />
+
+        {/* ============= DEFECTIVE ITEMS TABLE ============= */}
+        {defectiveItems.length > 0 && (
+          <div className={`mt-10 rounded-xl shadow-xl overflow-hidden border transition animate__animated animate__fadeInUp ${
+            darkMode
+              ? "bg-[#1F2937] border-[#374151]"
+              : "bg-white border-[#E5E7EB]"
+          }`}>
+            {/* Header */}
+            <div className={`p-4 border-b ${darkMode ? "border-[#374151]" : "border-[#E5E7EB]"}`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-lg ${darkMode ? "bg-red-500/20" : "bg-red-100"}`}>
+                    <Wrench className={`w-5 h-5 ${darkMode ? "text-red-400" : "text-red-600"}`} />
+                  </div>
+                  <div>
+                    <h3 className={`text-lg font-semibold ${darkMode ? "text-white" : "text-gray-900"}`}>
+                      Defective Items
+                    </h3>
+                    <p className={`text-xs ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+                      {defectiveItemsStats.activeDefectiveCount} active item(s) requiring repair or disposal
+                    </p>
+                  </div>
+                </div>
+                <div className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+                  Total Quantity: <span className="font-semibold text-red-500">{defectiveItemsStats.totalDefectiveQuantity}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[700px]">
+                <thead className={`${
+                  darkMode
+                    ? "bg-[#111827] text-[#D1D5DB]"
+                    : "bg-[#F9FAFB] text-[#374151]"
+                }`}>
+                  <tr>
+                    <th className="p-3 sm:p-4 text-center text-xs sm:text-sm font-semibold whitespace-nowrap">DATE</th>
+                    <th className="p-3 sm:p-4 text-center text-xs sm:text-sm font-semibold whitespace-nowrap">ITEM NAME</th>
+                    <th className="p-3 sm:p-4 text-center text-xs sm:text-sm font-semibold whitespace-nowrap">CATEGORY</th>
+                    <th className="p-3 sm:p-4 text-center text-xs sm:text-sm font-semibold whitespace-nowrap">QUANTITY</th>
+                    <th className="p-3 sm:p-4 text-center text-xs sm:text-sm font-semibold whitespace-nowrap">REASON</th>
+                    <th className="p-3 sm:p-4 text-center text-xs sm:text-sm font-semibold whitespace-nowrap">ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody className={
+                  darkMode ? "divide-y divide-[#374151]" : "divide-y divide-[#E5E7EB]"
+                }>
+                  {defectiveItems.map((record, index) => (
+                    <tr
+                      key={record.id}
+                      className={`transition ${
+                        darkMode ? "hover:bg-[#374151]/40" : "hover:bg-[#F3F4F6]"
+                      }`}
+                    >
+                      <td className="p-3 sm:p-4 text-sm whitespace-nowrap text-center align-middle">
+                        {record.date}
+                      </td>
+                      <td className="p-3 sm:p-4 font-semibold text-sm whitespace-nowrap text-center align-middle">
+                        {record.itemName}
+                      </td>
+                      <td className="p-3 sm:p-4 text-sm whitespace-nowrap text-center align-middle">
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${
+                          darkMode
+                            ? "bg-red-500/20 text-red-400 border-red-500/30"
+                            : "bg-red-100 text-red-700 border-red-200"
+                        }`}>
+                          {record.category || "Others"}
+                        </span>
+                      </td>
+                      <td className="p-3 sm:p-4 text-center align-middle">
+                        <span className={`px-2 sm:px-3 py-1 rounded-lg font-bold text-xs sm:text-sm ${
+                          darkMode
+                            ? "bg-red-500/20 text-red-400 border border-red-500/30"
+                            : "bg-red-100 text-red-700 border border-red-200"
+                        }`}>
+                          {record.quantity}
+                        </span>
+                      </td>
+                      <td className={`p-3 sm:p-4 text-sm text-center align-middle max-w-xs truncate ${
+                        darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"
+                      }`}>
+                        {record.reason || "-"}
+                      </td>
+                      <td className="p-3 sm:p-4 text-center align-middle">
+                        <button
+                          onClick={() => handleMarkAsFixed(record.id)}
+                          disabled={isMarkingFixed === record.id}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            isMarkingFixed === record.id
+                              ? "bg-gray-400 cursor-not-allowed text-white"
+                              : darkMode
+                                ? "bg-green-600 hover:bg-green-700 text-white"
+                                : "bg-green-600 hover:bg-green-700 text-white"
+                          }`}
+                          title="Mark as fixed and return to inventory"
+                        >
+                          {isMarkingFixed === record.id ? (
+                            <>
+                              <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              Processing...
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              Mark as Fixed
+                            </>
+                          )}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {showExportModal && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
