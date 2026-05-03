@@ -6,9 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "next lint"
   },
-    "dependencies": {
+  "engines": {
+    "node": ">=18.17.0",
+    "npm": ">=9.0.0"
+  },
+  "dependencies": {
     "@supabase/supabase-js": "^2.93.3",
     "animate.css": "^4.1.1",
     "axios": "^1.13.4",
@@ -23,15 +27,15 @@
     "styled-components": "^6.3.9"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "25.1.0",
-    "@types/react": "19.2.10",
+    "@tailwindcss/postcss": "^4.1.0",
+    "@types/node": "^20.11.0",
+    "@types/react": "^19.0.0",
     "autoprefixer": "^10.4.20",
-    "eslint": "^4.1.1",
-    "eslint-config-next": "^0.2.4",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^16.1.6",
     "postcss": "^8.4.49",
     "supabase": "^2.78.1",
-    "tailwindcss": "^4",
-    "typescript": "5.9.3"
+    "tailwindcss": "^4.1.0",
+    "typescript": "^5.4.0"
   }
 }

@@ -1,7 +1,6 @@
 "use client";
-/* eslint-disable react-hooks/rules-of-hooks */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import AuthGuard from "../../components/AuthGuard";
 import TopNavbar from "../../components/TopNavbar";
 import Sidebar from "../../components/Sidebar";
@@ -28,7 +27,20 @@ export default function Page() {
   const [availableItems, setAvailableItems] = useState([]);
   const [date, setDate] = useState("");
   const { role, displayName, userEmail } = useAuth();
+  
+  // Single item selection state
+  const [selectedItemId, setSelectedItemId] = useState("");
   const [quantity, setQuantity] = useState(1);
+  
+  // Computed values for stock availability
+  const availableStock = useMemo(() => {
+    if (!selectedItemId) return 0;
+    const item = availableItems.find(item => item.name === selectedItemId || item.id === selectedItemId);
+    return item ? item.quantity : 0;
+  }, [selectedItemId, availableItems]);
+  
+  const maxQuantity = availableStock;
+  const canAddParcelOut = availableStock > 0;
   const [timeHour, setTimeHour] = useState("1");
   const [timeMinute, setTimeMinute] = useState("00");
   const [timeAMPM, setTimeAMPM] = useState("AM");
@@ -212,9 +224,10 @@ export default function Page() {
     }
 
     // Add each row
+    let successCount = 0;
     for (const row of parcelRows) {
       const quantityToAdd = parseInt(row.quantity);
-      const computedTotalPrice = (parseFloat(row.price) || 0) * quantityToAdd;
+      const rowTotalPrice = (parseFloat(row.price) || 0) * quantityToAdd;
 
       const result = await handleAddParcelOut({
         item_name: row.name,
@@ -223,33 +236,43 @@ export default function Page() {
         timeHour,
         timeMinute,
         timeAMPM,
-        shipping_mode: row.shippingMode,
-        client_name: row.clientName,
-        price: computedTotalPrice,
-        category: row.category,
+        shipping_mode: row.shippingMode || shippingMode,
+        client_name: row.clientName || clientName,
+        price: rowTotalPrice,
+        category: row.category || category,
       });
 
-    if (!result || !result.newItem) return;
-
-    await logActivity({
-      userId: userEmail || null,
-      userName: displayName || userEmail || "Unknown User",
-      userType: role || "staff",
-      action: "Stock OUT",
-      module: "Inventory",
-      details: `Removed ${quantity}x ${selectedItemId} (Client: ${clientName || "N/A"})`,
-    });
-
-setItems(result.updatedOut || []);
-setAvailableItems(aggregateAvailableItems(result.updatedIn || []));
+      if (result && result.newItem) {
+        successCount++;
+        await logActivity({
+          userId: userEmail || null,
+          userName: displayName || userEmail || "Unknown User",
+          userType: role || "staff",
+          action: "Stock OUT",
+          module: "Inventory",
+          details: `Removed ${quantityToAdd}x ${row.name} (Client: ${row.clientName || clientName || "N/A"})`,
+        });
+      }
+    }
+    
+    // Reload data
+    await loadStockOutData();
 
     alert(
-      `✅ Successfully created Parcel Out!\n` +
-        `Item: ${selectedItemId}\n` +
-        `Quantity Out: ${quantity} units`,
+      `✅ Successfully created ${successCount} Stock Out record(s)!`,
     );
 
+    // Reset form
     setSelectedItemId("");
+    setParcelRows([{
+      id: 1,
+      name: "",
+      quantity: 1,
+      price: "",
+      category: CATEGORIES.ELECTRONICS,
+      shippingMode: "",
+      clientName: "",
+    }]);
     setDate("");
     setQuantity(1);
     setTimeHour("1");
@@ -287,7 +310,7 @@ setAvailableItems(aggregateAvailableItems(result.updatedIn || []));
         <Sidebar
           sidebarOpen={sidebarOpen}
           setSidebarOpen={setSidebarOpen}
-          activeTab="parcel-delivery"
+          activeTab="stock-out"
           darkMode={darkMode}
         />
 
@@ -341,30 +364,29 @@ setAvailableItems(aggregateAvailableItems(result.updatedIn || []));
                 "p-6 rounded-xl shadow-lg mb-8 border transition animate__animated animate__fadeInUp animate__faster bg-white border-[#E5E7EB] text-[#111827]"
               )}
             >
-              <div className="flex items-center gap-2 mb-5">
-                <Plus
-                  className={`w-5 h-5 ${
-                    darkMode ? "text-[#EF4444]" : "text-[#DC2626]"
-                  }`}
-                />
-                <h2
-                  className={`text-lg font-semibold ${
-                    darkMode ? "text-white" : "text-[#111827]"
-                  }`}
-                >
-                  Out Item
-                </h2>
+              <div className="flex items-center gap-2 mb-6">
+                <div className="flex items-center gap-2">
+                  <Plus
+                    className={getClassName(
+                      darkMode,
+                      "w-5 h-5 text-[#EF4444]",
+                      "w-5 h-5 text-[#DC2626]"
+                    )}
+                  />
+                  <h2 className="text-lg font-semibold">Out Item</h2>
+                </div>
               </div>
 
-              {/* Date and Time (shared for all items) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4 mb-6">
+              {/* Row 1: Item Name, Date, Quantity, Time Out */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                {/* Item Name */}
                 <div className="flex flex-col">
-                  <label
-                    className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
-                    <Package className="w-4 h-4" /> Item Name
+                  <label className={getClassName(
+                    darkMode,
+                    "text-xs font-medium mb-1.5 text-gray-300 flex items-center gap-1",
+                    "text-xs font-medium mb-1.5 text-gray-700 flex items-center gap-1"
+                  )}>
+                    <Package className="w-3.5 h-3.5" /> Item Name
                   </label>
                   <select
                     value={selectedItemId}
@@ -372,16 +394,14 @@ setAvailableItems(aggregateAvailableItems(result.updatedIn || []));
                       setSelectedItemId(e.target.value);
                       setQuantity(1);
                     }}
-                    className={`border rounded-lg px-3 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#EF4444] focus:border-[#EF4444] bg-[#111827] text-white"
-                        : "border-[#D1D5DB] focus:ring-[#DC2626] focus:border-[#DC2626] bg-white text-black"
-                    }`}
+                    className={getClassName(
+                      darkMode,
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#EF4444] focus:border-[#EF4444] bg-[#111827] text-white",
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#DC2626] focus:border-[#DC2626] bg-white text-black"
+                    )}
                     required
                   >
-                    <option value="" disabled>
-                      Please select
-                    </option>
+                    <option value="" disabled>Please select</option>
                     {availableItems.map((item) => (
                       <option key={item.id} value={item.name}>
                         {item.name} (Stock: {item.quantity})
@@ -392,33 +412,34 @@ setAvailableItems(aggregateAvailableItems(result.updatedIn || []));
 
                 {/* Date */}
                 <div className="flex flex-col">
-                  <label
-                    className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
-                    <Calendar className="w-4 h-4" /> Date
+                  <label className={getClassName(
+                    darkMode,
+                    "text-xs font-medium mb-1.5 text-gray-300 flex items-center gap-1",
+                    "text-xs font-medium mb-1.5 text-gray-700 flex items-center gap-1"
+                  )}>
+                    <Calendar className="w-3.5 h-3.5" /> Date
                   </label>
                   <input
                     type="date"
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
-                    className={`border rounded-lg px-3 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#EF4444] focus:border-[#EF4444] bg-[#111827] text-white"
-                        : "border-[#D1D5DB] focus:ring-[#DC2626] focus:border-[#DC2626] bg-white text-black"
-                    }`}
+                    className={getClassName(
+                      darkMode,
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#EF4444] focus:border-[#EF4444] bg-[#111827] text-white",
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#DC2626] focus:border-[#DC2626] bg-white text-black"
+                    )}
                     required
                   />
                 </div>
 
+                {/* Quantity */}
                 <div className="flex flex-col">
-                  <label
-                    className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
-                    <Package className="w-4 h-4" /> Quantity
+                  <label className={getClassName(
+                    darkMode,
+                    "text-xs font-medium mb-1.5 text-gray-300 flex items-center gap-1",
+                    "text-xs font-medium mb-1.5 text-gray-700 flex items-center gap-1"
+                  )}>
+                    <Package className="w-3.5 h-3.5" /> Quantity
                   </label>
                   <input
                     type="number"
@@ -427,67 +448,55 @@ setAvailableItems(aggregateAvailableItems(result.updatedIn || []));
                     value={quantity}
                     onChange={(e) => setQuantity(e.target.value)}
                     disabled={!selectedItemId || !canAddParcelOut}
-                    className={`border rounded-lg px-3 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#EF4444] focus:border-[#EF4444] bg-[#111827] text-white disabled:bg-[#0B0B0B] disabled:opacity-50 disabled:cursor-not-allowed"
-                        : "border-[#D1D5DB] focus:ring-[#DC2626] focus:border-[#DC2626] bg-white text-black disabled:bg-[#F3F4F6] disabled:opacity-50 disabled:cursor-not-allowed"
-                    }`}
+                    className={getClassName(
+                      darkMode,
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#EF4444] focus:border-[#EF4444] bg-[#111827] text-white disabled:bg-[#0B0B0B] disabled:opacity-50 disabled:cursor-not-allowed",
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#DC2626] focus:border-[#DC2626] bg-white text-black disabled:bg-[#F3F4F6] disabled:opacity-50 disabled:cursor-not-allowed"
+                    )}
                     required
                   />
                   {selectedItemId && !canAddParcelOut && (
-                    <p className="text-xs text-[#EF4444] mt-1">
-                      ⚠️ No stock available
-                    </p>
+                    <p className="text-[10px] text-[#EF4444] mt-1">⚠️ No stock available</p>
                   )}
                   {selectedItemId && canAddParcelOut && (
-                    <p
-                      className={`text-xs mt-1 ${darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"}`}
-                    >
-                      Available: {availableStock} units (can take out 1-
-                      {maxQuantity})
-                    </p>
-                  )}
-                  {selectedItemId && (
-                    <p
-                      className={`text-xs mt-1 ${darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"}`}
-                    >
-                      Unique Items Available: {availableItems.length} different types
+                    <p className={getClassName(darkMode, "text-[10px] mt-1 text-gray-400", "text-[10px] mt-1 text-gray-500")}>
+                      Available: {availableStock} units (1-{maxQuantity})
                     </p>
                   )}
                 </div>
 
                 {/* Time Out */}
                 <div className="flex flex-col">
-                  <label
-                    className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
-                    <Clock className="w-4 h-4" /> Time Out
+                  <label className={getClassName(
+                    darkMode,
+                    "text-xs font-medium mb-1.5 text-gray-300 flex items-center gap-1",
+                    "text-xs font-medium mb-1.5 text-gray-700 flex items-center gap-1"
+                  )}>
+                    <Clock className="w-3.5 h-3.5" /> Time Out
                   </label>
-                  <div className="flex gap-2">
+                  <div className="flex gap-1">
                     <select
                       value={timeHour}
                       onChange={(e) => setTimeHour(e.target.value)}
-                      className={`border rounded-lg px-2 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
-                        darkMode
-                          ? "border-[#374151] focus:ring-[#EF4444] focus:border-[#EF4444] bg-[#111827] text-white"
-                          : "border-[#D1D5DB] focus:ring-[#DC2626] focus:border-[#DC2626] bg-white text-black"
-                      }`}
+                      className={getClassName(
+                        darkMode,
+                        "border rounded-lg px-2 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#EF4444] focus:border-[#EF4444] bg-[#111827] text-white",
+                        "border rounded-lg px-2 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#DC2626] focus:border-[#DC2626] bg-white text-black"
+                      )}
                     >
                       {Array.from({ length: 12 }, (_, i) => i + 1).map((hour) => (
                         <option key={hour} value={hour}>{hour}</option>
                       ))}
                     </select>
-                    <span className="self-center">:</span>
+                    <span className="self-center text-sm">:</span>
                     <select
                       value={timeMinute}
                       onChange={(e) => setTimeMinute(e.target.value)}
-                      className={`border rounded-lg px-2 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
-                        darkMode
-                          ? "border-[#374151] focus:ring-[#EF4444] focus:border-[#EF4444] bg-[#111827] text-white"
-                          : "border-[#D1D5DB] focus:ring-[#DC2626] focus:border-[#DC2626] bg-white text-black"
-                      }`}
+                      className={getClassName(
+                        darkMode,
+                        "border rounded-lg px-2 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#EF4444] focus:border-[#EF4444] bg-[#111827] text-white",
+                        "border rounded-lg px-2 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#DC2626] focus:border-[#DC2626] bg-white text-black"
+                      )}
                     >
                       <option value="00">00</option>
                       <option value="15">15</option>
@@ -497,11 +506,11 @@ setAvailableItems(aggregateAvailableItems(result.updatedIn || []));
                     <select
                       value={timeAMPM}
                       onChange={(e) => setTimeAMPM(e.target.value)}
-                      className={`border rounded-lg px-2 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
-                        darkMode
-                          ? "border-[#374151] focus:ring-[#EF4444] focus:border-[#EF4444] bg-[#111827] text-white"
-                          : "border-[#D1D5DB] focus:ring-[#DC2626] focus:border-[#DC2626] bg-white text-black"
-                      }`}
+                      className={getClassName(
+                        darkMode,
+                        "border rounded-lg px-2 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#EF4444] focus:border-[#EF4444] bg-[#111827] text-white",
+                        "border rounded-lg px-2 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#DC2626] focus:border-[#DC2626] bg-white text-black"
+                      )}
                     >
                       <option value="AM">AM</option>
                       <option value="PM">PM</option>
@@ -510,24 +519,25 @@ setAvailableItems(aggregateAvailableItems(result.updatedIn || []));
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+              {/* Row 2: Category, Shipping Mode, Client Name, Price */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                 {/* Category */}
                 <div className="flex flex-col">
-                  <label
-                    className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
-                    <Package className="w-4 h-4" /> Category
+                  <label className={getClassName(
+                    darkMode,
+                    "text-xs font-medium mb-1.5 text-gray-300 flex items-center gap-1",
+                    "text-xs font-medium mb-1.5 text-gray-700 flex items-center gap-1"
+                  )}>
+                    <Package className="w-3.5 h-3.5" /> Category
                   </label>
                   <select
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
-                    className={`border rounded-lg px-3 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#EF4444] focus:border-[#EF4444] bg-[#111827] text-white"
-                        : "border-[#D1D5DB] focus:ring-[#DC2626] focus:border-[#DC2626] bg-white text-black"
-                    }`}
+                    className={getClassName(
+                      darkMode,
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#EF4444] focus:border-[#EF4444] bg-[#111827] text-white",
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#DC2626] focus:border-[#DC2626] bg-white text-black"
+                    )}
                     required
                   >
                     {CATEGORY_OPTIONS.map((option) => (
@@ -537,12 +547,14 @@ setAvailableItems(aggregateAvailableItems(result.updatedIn || []));
                     ))}
                   </select>
                 </div>
+
+                {/* Shipping Mode */}
                 <div className="flex flex-col">
-                  <label
-                    className={`text-sm font-medium mb-2 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
+                  <label className={getClassName(
+                    darkMode,
+                    "text-xs font-medium mb-1.5 text-gray-300",
+                    "text-xs font-medium mb-1.5 text-gray-700"
+                  )}>
                     Shipping Mode
                   </label>
                   <input
@@ -550,26 +562,28 @@ setAvailableItems(aggregateAvailableItems(result.updatedIn || []));
                     value={shippingMode}
                     onChange={(e) => setShippingMode(e.target.value)}
                     placeholder="Shopee (J&T)"
-                    className={`border rounded-lg px-3 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#EF4444] focus:border-[#EF4444] bg-[#111827] text-white"
-                        : "border-[#D1D5DB] focus:ring-[#DC2626] focus:border-[#DC2626] bg-white text-black"
-                    }`}
+                    className={getClassName(
+                      darkMode,
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#EF4444] focus:border-[#EF4444] bg-[#111827] text-white",
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#DC2626] focus:border-[#DC2626] bg-white text-black"
+                    )}
                   />
-                  <p
-                    className={`text-xs mt-1 ${
-                      darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"
-                    }`}
-                  >
+                  <p className={getClassName(
+                    darkMode,
+                    "text-[10px] mt-1 text-gray-400",
+                    "text-[10px] mt-1 text-gray-500"
+                  )}>
                     Display Price: ₱{computedTotalPrice.toLocaleString()}
                   </p>
                 </div>
+
+                {/* Client Name */}
                 <div className="flex flex-col">
-                  <label
-                    className={`text-sm font-medium mb-2 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
+                  <label className={getClassName(
+                    darkMode,
+                    "text-xs font-medium mb-1.5 text-gray-300",
+                    "text-xs font-medium mb-1.5 text-gray-700"
+                  )}>
                     Client Name
                   </label>
                   <input
@@ -577,19 +591,21 @@ setAvailableItems(aggregateAvailableItems(result.updatedIn || []));
                     value={clientName}
                     onChange={(e) => setClientName(e.target.value)}
                     placeholder="Client name"
-                    className={`border rounded-lg px-3 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#EF4444] focus:border-[#EF4444] bg-[#111827] text-white"
-                        : "border-[#D1D5DB] focus:ring-[#DC2626] focus:border-[#DC2626] bg-white text-black"
-                    }`}
+                    className={getClassName(
+                      darkMode,
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#EF4444] focus:border-[#EF4444] bg-[#111827] text-white",
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#DC2626] focus:border-[#DC2626] bg-white text-black"
+                    )}
                   />
                 </div>
+
+                {/* Price */}
                 <div className="flex flex-col">
-                  <label
-                    className={`text-sm font-medium mb-2 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
+                  <label className={getClassName(
+                    darkMode,
+                    "text-xs font-medium mb-1.5 text-gray-300",
+                    "text-xs font-medium mb-1.5 text-gray-700"
+                  )}>
                     Price
                   </label>
                   <input
@@ -599,34 +615,32 @@ setAvailableItems(aggregateAvailableItems(result.updatedIn || []));
                     value={price}
                     onChange={(e) => setPrice(e.target.value)}
                     placeholder="0.00"
-                    className={`border rounded-lg px-3 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#EF4444] focus:border-[#EF4444] bg-[#111827] text-white"
-                        : "border-[#D1D5DB] focus:ring-[#DC2626] focus:border-[#DC2626] bg-white text-black"
-                    }`}
+                    className={getClassName(
+                      darkMode,
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#EF4444] focus:border-[#EF4444] bg-[#111827] text-white",
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#DC2626] focus:border-[#DC2626] bg-white text-black"
+                    )}
                   />
                 </div>
               </div>
 
-              {/* Submit */}
-              <div className="flex justify-end items-center gap-3 mt-6">
+              {/* Buttons */}
+              <div className="flex justify-end items-center gap-3 mt-4">
                 <button
                   type="button"
                   onClick={() => setShowMultipleInput(true)}
-                  className="bg-[#22C55E] hover:bg-[#16A34A] text-white px-5 py-2.5 rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg"
+                  className="bg-[#22C55E] hover:bg-[#16A34A] text-white px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg"
                 >
-                  <Plus className="w-5 h-5" /> Multiple Items
+                  <Plus className="w-4 h-4" /> Multiple Items
                 </button>
                 <button
                   type="submit"
                   disabled={!canAddParcelOut}
-                  className={`bg-gradient-to-r from-[#EF4444] to-[#DC2626] hover:from-[#DC2626] hover:to-[#B91C1C] text-white px-6 py-2.5 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg ${
-                    canAddParcelOut
-                      ? "animate__animated animate__pulse animate__infinite animate__slow"
-                      : "opacity-50 cursor-not-allowed"
+                  className={`bg-[#EF4444] hover:bg-[#DC2626] text-white px-5 py-2 rounded-lg font-medium text-sm transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg ${
+                    canAddParcelOut ? "" : "opacity-50 cursor-not-allowed"
                   }`}
                 >
-                  <Plus className="w-5 h-5" /> Out {parcelRows.length} {parcelRows.length === 1 ? 'Item' : 'Items'}
+                  <Plus className="w-4 h-4" /> Out Item
                 </button>
               </div>
             </form>
@@ -959,5 +973,4 @@ setAvailableItems(aggregateAvailableItems(result.updatedIn || []));
       </div>
     </AuthGuard>
   );
-}
 }

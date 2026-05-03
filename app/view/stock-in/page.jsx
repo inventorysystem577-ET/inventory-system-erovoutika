@@ -1,5 +1,4 @@
 "use client";
-/* eslint-disable react-hooks/rules-of-hooks */
 
 import React, { useState, useEffect, Suspense } from "react";
 import AuthGuard from "../../components/AuthGuard";
@@ -39,6 +38,10 @@ function PageContent() {
   const [darkMode, setDarkMode] = useState(false);
 
   const [items, setItems] = useState([]);
+  
+  // Single input form state
+  const [name, setName] = useState("");
+  const [quantity, setQuantity] = useState(1);
   
   // Multiple products state for parcels
   const [parcelRows, setParcelRows] = useState([
@@ -123,6 +126,15 @@ function PageContent() {
     }
   }, [itemParam]);
 
+  // Sync name with first parcel row when in single input mode
+  useEffect(() => {
+    if (!showMultipleInput && parcelRows.length > 0) {
+      setParcelRows(rows => rows.map((row, idx) => 
+        idx === 0 ? { ...row, name, quantity } : row
+      ));
+    }
+  }, [name, quantity, showMultipleInput]);
+
   const updateParcelRow = (id, field, value) => {
     setParcelRows(parcelRows.map(row => {
       if (row.id === id) {
@@ -201,43 +213,59 @@ function PageContent() {
     );
     if (!confirmed) return;
 
-    const result = await handleAddParcelIn({
-      name,
-      date,
-      quantity,
-      timeHour,
-      timeMinute,
-      timeAMPM,
-      shipping_mode: shippingMode,
-      client_name: clientName,
-      price: computedTotalPrice,
-      category: category,
-    });
-    if (!result || !result.newItem) return;
-
-    await logActivity({
-      userId: userEmail || null,
-     userName: displayName || userEmail || "Unknown User",
-      userType: role || "staff",
-      action: "Stock IN",
-      module: "Inventory",
-      details: `Added ${quantity}x ${name}`,
-    });
+    // Process each valid parcel row
+    let successCount = 0;
+    for (const row of validParcels) {
+      const rowTotalPrice = (Number(row.price) || 0) * (Number(row.quantity) || 0);
+      const result = await handleAddParcelIn({
+        name: row.name,
+        date,
+        quantity: row.quantity,
+        timeHour,
+        timeMinute,
+        timeAMPM,
+        shipping_mode: shippingMode || row.shippingMode,
+        client_name: clientName || row.clientName,
+        price: rowTotalPrice,
+        category: category,
+      });
+      if (result && result.newItem) {
+        successCount++;
+        await logActivity({
+          userId: userEmail || null,
+          userName: displayName || userEmail || "Unknown User",
+          userType: role || "staff",
+          action: "Stock IN",
+          module: "Inventory",
+          details: `Added ${row.quantity}x ${row.name}`,
+        });
+      }
+    }
     
-    setItems(
-      result.items
-        .map((item) => ({ ...item, quantity: Number(item.quantity || 0) }))
-        .filter((item) => item.quantity > 0)
-        .sort((a, b) => b.quantity - a.quantity),
-    );
+    // Reload items to show updated list
+    await loadItems();
 
+    // Reset form
     setName("");
+    setQuantity(1);
+    setParcelRows([{
+      id: 1,
+      name: "",
+      quantity: 1,
+      price: "",
+      category: CATEGORIES.ELECTRONICS,
+      shippingMode: "",
+      clientName: "",
+    }]);
     setDate("");
     setTimeHour("1");
     setTimeMinute("00");
     setTimeAMPM("AM");
+    setShippingMode("");
+    setClientName("");
+    setPrice("");
     
-    alert(`${validParcels.length} Stock In record(s) added successfully.`);
+    alert(`${successCount} Stock In record(s) added successfully.`);
   };
 
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -272,7 +300,7 @@ function PageContent() {
         <Sidebar
           sidebarOpen={sidebarOpen}
           setSidebarOpen={setSidebarOpen}
-          activeTab="parcel-shipped"
+          activeTab="stock-in"
           darkMode={darkMode}
         />
 
@@ -337,19 +365,43 @@ function PageContent() {
                       "w-5 h-5 text-[#1E3A8A]"
                     )}
                   />
-                  <h2 className="text-lg font-semibold">Items to In</h2>
+                  <h2 className="text-lg font-semibold">Add New Item</h2>
                 </div>
               </div>
 
-              {/* Date and Time (shared for all items) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4 mb-6">
+              {/* Row 1: Item Name, Date, Quantity, Time In */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                {/* Item Name */}
                 <div className="flex flex-col">
                   <label className={getClassName(
                     darkMode,
-                    "text-sm font-medium mb-2 text-gray-300",
-                    "text-sm font-medium mb-2 text-gray-700"
+                    "text-xs font-medium mb-1.5 text-gray-300 flex items-center gap-1",
+                    "text-xs font-medium mb-1.5 text-gray-700 flex items-center gap-1"
                   )}>
-                    <Calendar className="w-4 h-4 inline mr-1" /> Date
+                    <Package className="w-3.5 h-3.5" /> Item Name
+                  </label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Item name"
+                    className={getClassName(
+                      darkMode,
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                    )}
+                    required
+                  />
+                </div>
+
+                {/* Date */}
+                <div className="flex flex-col">
+                  <label className={getClassName(
+                    darkMode,
+                    "text-xs font-medium mb-1.5 text-gray-300 flex items-center gap-1",
+                    "text-xs font-medium mb-1.5 text-gray-700 flex items-center gap-1"
+                  )}>
+                    <Calendar className="w-3.5 h-3.5" /> Date
                   </label>
                   <input
                     type="date"
@@ -357,43 +409,67 @@ function PageContent() {
                     onChange={(e) => setDate(e.target.value)}
                     className={getClassName(
                       darkMode,
-                      "border rounded-lg px-3 py-2.5 w-full focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
-                      "border rounded-lg px-3 py-2.5 w-full focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
                     )}
                     required
                   />
                 </div>
 
+                {/* Quantity */}
                 <div className="flex flex-col">
                   <label className={getClassName(
                     darkMode,
-                    "text-sm font-medium mb-2 text-gray-300",
-                    "text-sm font-medium mb-2 text-gray-700"
+                    "text-xs font-medium mb-1.5 text-gray-300 flex items-center gap-1",
+                    "text-xs font-medium mb-1.5 text-gray-700 flex items-center gap-1"
                   )}>
-                    <Clock className="w-4 h-4 inline mr-1" /> Time In
+                    <PackageCheck className="w-3.5 h-3.5" /> Quantity
                   </label>
-                  <div className="flex gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    value={quantity}
+                    onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+                    className={getClassName(
+                      darkMode,
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                    )}
+                    required
+                  />
+                </div>
+
+                {/* Time In */}
+                <div className="flex flex-col">
+                  <label className={getClassName(
+                    darkMode,
+                    "text-xs font-medium mb-1.5 text-gray-300 flex items-center gap-1",
+                    "text-xs font-medium mb-1.5 text-gray-700 flex items-center gap-1"
+                  )}>
+                    <Clock className="w-3.5 h-3.5" /> Time In
+                  </label>
+                  <div className="flex gap-1">
                     <select
                       value={timeHour}
                       onChange={(e) => setTimeHour(e.target.value)}
                       className={getClassName(
                         darkMode,
-                        "border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
-                        "border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                        "border rounded-lg px-2 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                        "border rounded-lg px-2 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
                       )}
                     >
                       {Array.from({ length: 12 }, (_, i) => i + 1).map((hour) => (
                         <option key={hour} value={hour}>{hour}</option>
                       ))}
                     </select>
-                    <span className="self-center">:</span>
+                    <span className="self-center text-sm">:</span>
                     <select
                       value={timeMinute}
                       onChange={(e) => setTimeMinute(e.target.value)}
                       className={getClassName(
                         darkMode,
-                        "border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
-                        "border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                        "border rounded-lg px-2 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                        "border rounded-lg px-2 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
                       )}
                     >
                       <option value="00">00</option>
@@ -406,8 +482,8 @@ function PageContent() {
                       onChange={(e) => setTimeAMPM(e.target.value)}
                       className={getClassName(
                         darkMode,
-                        "border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
-                        "border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                        "border rounded-lg px-2 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                        "border rounded-lg px-2 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
                       )}
                     >
                       <option value="AM">AM</option>
@@ -417,24 +493,25 @@ function PageContent() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-4">
+              {/* Row 2: Category, Shipping Mode, Client Name, Price */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                 {/* Category */}
-                <div>
-                  <label
-                    className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
-                    <Package className="w-4 h-4" /> Category
+                <div className="flex flex-col">
+                  <label className={getClassName(
+                    darkMode,
+                    "text-xs font-medium mb-1.5 text-gray-300 flex items-center gap-1",
+                    "text-xs font-medium mb-1.5 text-gray-700 flex items-center gap-1"
+                  )}>
+                    <Package className="w-3.5 h-3.5" /> Category
                   </label>
                   <select
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
-                    className={`border rounded-lg px-4 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white"
-                        : "border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
-                    }`}
+                    className={getClassName(
+                      darkMode,
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                    )}
                     required
                   >
                     {CATEGORY_OPTIONS.map((option) => (
@@ -444,12 +521,14 @@ function PageContent() {
                     ))}
                   </select>
                 </div>
-                <div>
-                  <label
-                    className={`text-sm font-medium mb-2 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
+
+                {/* Shipping Mode */}
+                <div className="flex flex-col">
+                  <label className={getClassName(
+                    darkMode,
+                    "text-xs font-medium mb-1.5 text-gray-300",
+                    "text-xs font-medium mb-1.5 text-gray-700"
+                  )}>
                     Shipping Mode
                   </label>
                   <input
@@ -457,26 +536,28 @@ function PageContent() {
                     value={shippingMode}
                     onChange={(e) => setShippingMode(e.target.value)}
                     placeholder="Shopee (J&T)"
-                    className={`border rounded-lg px-4 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white"
-                        : "border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
-                    }`}
+                    className={getClassName(
+                      darkMode,
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                    )}
                   />
-                  <p
-                    className={`text-xs mt-1 ${
-                      darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"
-                    }`}
-                  >
+                  <p className={getClassName(
+                    darkMode,
+                    "text-[10px] mt-1 text-gray-400",
+                    "text-[10px] mt-1 text-gray-500"
+                  )}>
                     Display Price: ₱{computedTotalPrice.toLocaleString()}
                   </p>
                 </div>
-                <div>
-                  <label
-                    className={`text-sm font-medium mb-2 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
+
+                {/* Client Name */}
+                <div className="flex flex-col">
+                  <label className={getClassName(
+                    darkMode,
+                    "text-xs font-medium mb-1.5 text-gray-300",
+                    "text-xs font-medium mb-1.5 text-gray-700"
+                  )}>
                     Client Name
                   </label>
                   <input
@@ -484,19 +565,20 @@ function PageContent() {
                     value={clientName}
                     onChange={(e) => setClientName(e.target.value)}
                     placeholder="Client name"
-                    className={`border rounded-lg px-4 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white"
-                        : "border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
-                    }`}
+                    className={getClassName(
+                      darkMode,
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                    )}
                   />
                 </div>
-                <div>
-                  <label
-                    className={`text-sm font-medium mb-2 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
+                {/* Price */}
+                <div className="flex flex-col">
+                  <label className={getClassName(
+                    darkMode,
+                    "text-xs font-medium mb-1.5 text-gray-300",
+                    "text-xs font-medium mb-1.5 text-gray-700"
+                  )}>
                     Price
                   </label>
                   <input
@@ -506,28 +588,29 @@ function PageContent() {
                     value={price}
                     onChange={(e) => setPrice(e.target.value)}
                     placeholder="0.00"
-                    className={`border rounded-lg px-4 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white"
-                        : "border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
-                    }`}
+                    className={getClassName(
+                      darkMode,
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                    )}
                   />
                 </div>
               </div>
 
-              <div className="flex justify-end items-center gap-3 mt-6">
+              {/* Buttons */}
+              <div className="flex justify-end items-center gap-3 mt-4">
                 <button
                   type="button"
                   onClick={() => setShowMultipleInput(true)}
-                  className="bg-[#22C55E] hover:bg-[#16A34A] text-white px-5 py-2.5 rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg"
+                  className="bg-[#22C55E] hover:bg-[#16A34A] text-white px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg"
                 >
-                  <Plus className="w-5 h-5" /> Multiple Items
+                  <Plus className="w-4 h-4" /> Multiple Items
                 </button>
                 <button
                   type="submit"
-                  className="bg-[#1E3A8A] hover:bg-[#1D4ED8] text-white px-6 py-2.5 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg"
+                  className="bg-[#1E3A8A] hover:bg-[#1D4ED8] text-white px-5 py-2 rounded-lg font-medium text-sm transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg"
                 >
-                  <Plus className="w-5 h-5" /> Add Item
+                  <Plus className="w-4 h-4" /> Add Item
                 </button>
               </div>
             </form>
