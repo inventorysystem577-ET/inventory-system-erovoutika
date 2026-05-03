@@ -216,8 +216,22 @@ export default function Page() {
   const handleAddItem = async (e) => {
     e.preventDefault();
     
+    // For single input mode, use the direct state values to avoid race condition
+    const isSingleInput = !showMultipleInput;
+    const rowsToProcess = isSingleInput
+      ? [{
+          id: 1,
+          name: selectedItemId,
+          quantity: parseInt(quantity) || 1,
+          price: price,
+          category: category,
+          shippingMode: shippingMode,
+          clientName: clientName,
+        }]
+      : parcelRows;
+    
     // Validate all rows have required fields
-    const invalidRows = parcelRows.filter(row => !row.name || row.quantity <= 0);
+    const invalidRows = rowsToProcess.filter(row => !row.name || row.quantity <= 0);
     if (invalidRows.length > 0) {
       alert("Please fill in all required fields (Item Name and Quantity) for each row.");
       return;
@@ -225,7 +239,7 @@ export default function Page() {
 
     // Add each row
     let successCount = 0;
-    for (const row of parcelRows) {
+    for (const row of rowsToProcess) {
       const quantityToAdd = parseInt(row.quantity);
       const rowTotalPrice = (parseFloat(row.price) || 0) * quantityToAdd;
 
@@ -474,43 +488,41 @@ export default function Page() {
                   )}>
                     <Clock className="w-3.5 h-3.5" /> Time Out
                   </label>
-                  <div className="flex gap-1">
+                  <div className="flex gap-2">
                     <select
                       value={timeHour}
                       onChange={(e) => setTimeHour(e.target.value)}
-                      className={getClassName(
-                        darkMode,
-                        "border rounded-lg px-2 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#EF4444] focus:border-[#EF4444] bg-[#111827] text-white",
-                        "border rounded-lg px-2 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#DC2626] focus:border-[#DC2626] bg-white text-black"
-                      )}
+                      className={`border rounded-lg px-2 py-2 flex-1 min-w-[50px] focus:outline-none focus:ring-2 transition-all ${
+                        darkMode
+                          ? "border-[#374151] focus:ring-[#EF4444] bg-[#111827] text-white"
+                          : "border-[#D1D5DB] focus:ring-[#DC2626] bg-white text-black"
+                      }`}
                     >
-                      {Array.from({ length: 12 }, (_, i) => i + 1).map((hour) => (
-                        <option key={hour} value={hour}>{hour}</option>
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
+                        <option key={h} value={h}>{h}</option>
                       ))}
                     </select>
-                    <span className="self-center text-sm">:</span>
                     <select
                       value={timeMinute}
                       onChange={(e) => setTimeMinute(e.target.value)}
-                      className={getClassName(
-                        darkMode,
-                        "border rounded-lg px-2 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#EF4444] focus:border-[#EF4444] bg-[#111827] text-white",
-                        "border rounded-lg px-2 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#DC2626] focus:border-[#DC2626] bg-white text-black"
-                      )}
+                      className={`border rounded-lg px-2 py-2 flex-1 min-w-[50px] focus:outline-none focus:ring-2 transition-all ${
+                        darkMode
+                          ? "border-[#374151] focus:ring-[#EF4444] bg-[#111827] text-white"
+                          : "border-[#D1D5DB] focus:ring-[#DC2626] bg-white text-black"
+                      }`}
                     >
-                      <option value="00">00</option>
-                      <option value="15">15</option>
-                      <option value="30">30</option>
-                      <option value="45">45</option>
+                      {Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, "0")).map((m) => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
                     </select>
                     <select
                       value={timeAMPM}
                       onChange={(e) => setTimeAMPM(e.target.value)}
-                      className={getClassName(
-                        darkMode,
-                        "border rounded-lg px-2 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#EF4444] focus:border-[#EF4444] bg-[#111827] text-white",
-                        "border rounded-lg px-2 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#DC2626] focus:border-[#DC2626] bg-white text-black"
-                      )}
+                      className={`border rounded-lg px-2 py-2 w-[60px] min-w-[60px] shrink-0 focus:outline-none focus:ring-2 transition-all ${
+                        darkMode
+                          ? "border-[#374151] focus:ring-[#EF4444] bg-[#111827] text-white"
+                          : "border-[#D1D5DB] focus:ring-[#DC2626] bg-white text-black"
+                      }`}
                     >
                       <option value="AM">AM</option>
                       <option value="PM">PM</option>
@@ -868,7 +880,7 @@ export default function Page() {
                               darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
                             }`}
                           >
-                            {buildProductCode(item, "CMP")}
+                            {item.item_code || buildProductCode(item, "CMP")}
                           </td>
                           <td
                             className={`px-4 sm:px-6 py-3 sm:py-4 text-center align-middle font-semibold text-sm sm:text-base break-words whitespace-normal ${

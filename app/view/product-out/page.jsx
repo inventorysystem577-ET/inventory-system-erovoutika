@@ -384,9 +384,12 @@ export default function ProductOutPage() {
       const monthMatch = !selectedMonth || itemMonth === selectedMonth;
       if (!monthMatch) return false;
       if (!keyword) return true;
+      const manualCode = (item.product_code || "").toLowerCase();
+      const autoCode = buildProductCode(item).toLowerCase();
       return (
         (item.product_name || "").toLowerCase().includes(keyword) ||
-        buildProductCode(item).toLowerCase().includes(keyword) ||
+        manualCode.includes(keyword) ||
+        autoCode.includes(keyword) ||
         buildSku(item).toLowerCase().includes(keyword) ||
         (item.description || "").toLowerCase().includes(keyword)
       );
@@ -413,7 +416,7 @@ export default function ProductOutPage() {
       item.price !== null && item.price !== undefined
         ? Number(item.price).toFixed(2)
         : "0.00";
-    const code = buildProductCode(item);
+    const code = item.product_code || buildProductCode(item);
     const sku = buildSku(item);
     receiptWindow.document.write(`
       <html>
@@ -661,39 +664,33 @@ export default function ProductOutPage() {
                     <select
                       value={timeHour}
                       onChange={(e) => setTimeHour(e.target.value)}
-                      className={`border rounded-lg px-2 py-2 w-full focus:outline-none focus:ring-2 ${
+                      className={`border rounded-lg px-2 py-2 flex-1 min-w-[50px] focus:outline-none focus:ring-2 transition-all ${
                         darkMode
                           ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
                           : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
                       }`}
                     >
                       {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
-                        <option key={h} value={h}>
-                          {h}
-                        </option>
+                        <option key={h} value={h}>{h}</option>
                       ))}
                     </select>
                     <select
                       value={timeMinute}
                       onChange={(e) => setTimeMinute(e.target.value)}
-                      className={`border rounded-lg px-2 py-2 w-full focus:outline-none focus:ring-2 ${
+                      className={`border rounded-lg px-2 py-2 flex-1 min-w-[50px] focus:outline-none focus:ring-2 transition-all ${
                         darkMode
                           ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
                           : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
                       }`}
                     >
-                      {Array.from({ length: 60 }, (_, i) =>
-                        i.toString().padStart(2, "0"),
-                      ).map((m) => (
-                        <option key={m} value={m}>
-                          {m}
-                        </option>
+                      {Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, "0")).map((m) => (
+                        <option key={m} value={m}>{m}</option>
                       ))}
                     </select>
                     <select
                       value={timeAMPM}
                       onChange={(e) => setTimeAMPM(e.target.value)}
-                      className={`border rounded-lg px-2 py-2 w-20 focus:outline-none focus:ring-2 ${
+                      className={`border rounded-lg px-2 py-2 w-[60px] min-w-[60px] shrink-0 focus:outline-none focus:ring-2 transition-all ${
                         darkMode
                           ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
                           : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
@@ -1185,7 +1182,7 @@ export default function ProductOutPage() {
                             : "border-[#E5E7EB] hover:bg-[#F3F4F6]"
                         } transition-colors`}
                       >
-                        <td className="p-3 text-center align-middle">{buildProductCode(item)}</td>
+                        <td className="p-3 text-center align-middle">{item.product_code || buildProductCode(item)}</td>
                         <td className="p-3 text-center align-middle font-medium">{item.product_name}</td>
                         <td className="p-3 text-center align-middle">{buildSku(item)}</td>
                         <td className="p-3 text-center align-middle">

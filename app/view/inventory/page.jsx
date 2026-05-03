@@ -90,12 +90,15 @@ import {
   getDefectiveItemsStats,
 } from "../../utils/defectiveItemsHelper";
 
+// Default thresholds are now 0-0 (manual input required)
+// Users must set their own thresholds per item
 const DEFAULT_STOCK_THRESHOLDS = {
-  critical: 5,
-  low: 10,
+  critical: 0,
+  low: 0,
 };
 
-const STOCK_THRESHOLDS_STORAGE_KEY = "inventory-item-thresholds-v1";
+// Changed to v2 - thresholds now default to 0-0 (manual input required)
+const STOCK_THRESHOLDS_STORAGE_KEY = "inventory-item-thresholds-v2";
 
 const normalizeItemKey = (value) =>
   (value || "")
@@ -108,15 +111,19 @@ const sanitizeThresholds = (value = {}) => {
   const criticalRaw = Number(value.critical);
   const lowRaw = Number(value.low);
 
+  // Allow 0 as valid value (manual input mode)
   const critical = Number.isFinite(criticalRaw)
-    ? Math.max(1, Math.floor(criticalRaw))
+    ? Math.max(0, Math.floor(criticalRaw))
     : DEFAULT_STOCK_THRESHOLDS.critical;
 
   let low = Number.isFinite(lowRaw)
-    ? Math.max(2, Math.floor(lowRaw))
+    ? Math.max(0, Math.floor(lowRaw))
     : DEFAULT_STOCK_THRESHOLDS.low;
 
-  if (low <= critical) low = critical + 1;
+  // Only enforce low > critical if both are > 0
+  if (critical > 0 && low > 0 && low <= critical) {
+    low = critical + 1;
+  }
 
   return { critical, low };
 };
@@ -276,9 +283,14 @@ export default function Page() {
     const qty = Number(quantity || 0);
     const normalizedThreshold = sanitizeThresholds(threshold);
 
+    // If thresholds are both 0 (not set), only show out of stock or available
+    if (normalizedThreshold.critical === 0 && normalizedThreshold.low === 0) {
+      return qty <= 0 ? "out" : "available";
+    }
+
     if (qty <= 0) return "out";
-    if (qty <= normalizedThreshold.critical) return "critical";
-    if (qty < normalizedThreshold.low) return "low";
+    if (normalizedThreshold.critical > 0 && qty <= normalizedThreshold.critical) return "critical";
+    if (normalizedThreshold.low > 0 && qty < normalizedThreshold.low) return "low";
     return "available";
   };
 
@@ -551,14 +563,16 @@ export default function Page() {
         parcelCategoryFilter.toLowerCase();
     const keyword = parcelSearch.trim().toLowerCase();
     if (!keyword) return statusMatch && categoryMatch;
-    const code = buildProductCode(item, "CMP").toLowerCase();
+    const manualCode = (item.item_code || "").toLowerCase();
+    const autoCode = buildProductCode(item, "CMP").toLowerCase();
     const sku = buildSku(item).toLowerCase();
     const name = (item.name || "").toLowerCase();
     return (
       statusMatch &&
       categoryMatch &&
       (name.includes(keyword) ||
-        code.includes(keyword) ||
+        manualCode.includes(keyword) ||
+        autoCode.includes(keyword) ||
         sku.includes(keyword))
     );
   });
@@ -576,14 +590,16 @@ export default function Page() {
         productCategoryFilter.toLowerCase();
     const keyword = productSearch.trim().toLowerCase();
     if (!keyword) return statusMatch && categoryMatch;
-    const code = buildProductCode(item).toLowerCase();
+    const manualCode = (item.product_code || "").toLowerCase();
+    const autoCode = buildProductCode(item).toLowerCase();
     const sku = buildSku(item).toLowerCase();
     const name = (item.product_name || "").toLowerCase();
     return (
       statusMatch &&
       categoryMatch &&
       (name.includes(keyword) ||
-        code.includes(keyword) ||
+        manualCode.includes(keyword) ||
+        autoCode.includes(keyword) ||
         sku.includes(keyword))
     );
   });
@@ -1749,7 +1765,7 @@ export default function Page() {
                             className={`transition-colors ${darkMode ? "hover:bg-[#374151]" : "hover:bg-[#F9FAFB]"}`}
                           >
                             <td className="px-4 py-3 text-sm">
-                              {buildProductCode(item, "CMP")}
+                              {item.item_code || buildProductCode(item, "CMP")}
                             </td>
                             <td className="px-4 py-3 text-sm font-medium align-top">
                               <div className="flex items-start gap-2 min-w-0">
@@ -2295,7 +2311,7 @@ export default function Page() {
                             className={`transition-colors ${darkMode ? "hover:bg-[#374151]" : "hover:bg-[#F9FAFB]"}`}
                           >
                             <td className="px-4 py-3 text-sm">
-                              {buildProductCode(item)}
+                              {item.product_code || buildProductCode(item)}
                             </td>
                             <td className="px-4 py-3 text-sm font-medium align-top">
                               <div className="flex items-start gap-2 min-w-0">

@@ -45,6 +45,7 @@ function PageContent() {
   // Single input form state
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState(1);
+  const [itemCode, setItemCode] = useState("");
   
   // Multiple products state for parcels
   const [parcelRows, setParcelRows] = useState([
@@ -56,6 +57,7 @@ function PageContent() {
       category: CATEGORIES.ELECTRONICS,
       shippingMode: "",
       clientName: "",
+      itemCode: "",
     }
   ]);
   
@@ -129,14 +131,14 @@ function PageContent() {
     }
   }, [itemParam]);
 
-  // Sync name with first parcel row when in single input mode
+  // Sync name, quantity, and itemCode with first parcel row when in single input mode
   useEffect(() => {
     if (!showMultipleInput && parcelRows.length > 0) {
       setParcelRows(rows => rows.map((row, idx) => 
-        idx === 0 ? { ...row, name, quantity } : row
+        idx === 0 ? { ...row, name, quantity, itemCode } : row
       ));
     }
-  }, [name, quantity, showMultipleInput]);
+  }, [name, quantity, itemCode, showMultipleInput]);
 
   const updateParcelRow = (id, field, value) => {
     setParcelRows(parcelRows.map(row => {
@@ -176,19 +178,22 @@ function PageContent() {
     const savedDarkMode = localStorage.getItem("darkMode");
     if (savedDarkMode !== null) setDarkMode(savedDarkMode === "true");
 
-    const now = new Date();
-    let hour = now.getHours();
-    const minute = now.getMinutes();
-    const ampm = hour >= 12 ? "PM" : "AM";
-    hour = hour % 12;
-    hour = hour ? hour : 12;
-    const formattedMinute = minute < 10 ? `0${minute}` : `${minute}`;
+    // Only set current time if not coming from URL params (no itemParam)
+    if (!itemParam) {
+      const now = new Date();
+      let hour = now.getHours();
+      const minute = now.getMinutes();
+      const ampm = hour >= 12 ? "PM" : "AM";
+      hour = hour % 12;
+      hour = hour ? hour : 12;
+      const formattedMinute = minute < 10 ? `0${minute}` : `${minute}`;
 
-    setTimeHour(hour.toString());
-    setTimeMinute(formattedMinute);
-    setTimeAMPM(ampm);
+      setTimeHour(hour.toString());
+      setTimeMinute(formattedMinute);
+      setTimeAMPM(ampm);
+    }
     loadItems();
-  }, []);
+  }, [itemParam]);
 
   const formatTo12Hour = (time) => {
     if (!time) return "";
@@ -204,8 +209,23 @@ function PageContent() {
   const handleAddItem = async (e) => {
     e.preventDefault();
     
+    // For single input mode, use the direct state values to avoid race condition with useEffect sync
+    const isSingleInput = !showMultipleInput;
+    const parcelsToProcess = isSingleInput 
+      ? [{ 
+          id: 1, 
+          name, 
+          quantity, 
+          price: parcelRows[0]?.price || "", 
+          itemCode,
+          category,
+          shippingMode: parcelRows[0]?.shippingMode || "",
+          clientName: parcelRows[0]?.clientName || ""
+        }]
+      : parcelRows.filter(row => row.name && row.quantity && date);
+    
     // Validate that at least one parcel is selected and all required fields are filled
-    const validParcels = parcelRows.filter(row => row.name && row.quantity && date);
+    const validParcels = parcelsToProcess.filter(row => row.name && row.quantity && date);
     if (validParcels.length === 0) {
       alert("Please select at least one item and fill all required fields");
       return;
@@ -230,7 +250,8 @@ function PageContent() {
         shipping_mode: shippingMode || row.shippingMode,
         client_name: clientName || row.clientName,
         price: rowTotalPrice,
-        category: category,
+        category: row.category || category,
+        item_code: row.itemCode || itemCode || null,
       });
       if (result && result.newItem) {
         successCount++;
@@ -251,6 +272,7 @@ function PageContent() {
     // Reset form
     setName("");
     setQuantity(1);
+    setItemCode("");
     setParcelRows([{
       id: 1,
       name: "",
@@ -259,6 +281,7 @@ function PageContent() {
       category: CATEGORIES.ELECTRONICS,
       shippingMode: "",
       clientName: "",
+      itemCode: "",
     }]);
     setDate("");
     setTimeHour("1");
@@ -372,8 +395,8 @@ function PageContent() {
                 </div>
               </div>
 
-              {/* Row 1: Item Name, Date, Quantity, Time In */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+              {/* Row 1: Item Name, Item Code, Date, Quantity, Time In */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
                 {/* Item Name */}
                 <div className="flex flex-col">
                   <label className={getClassName(
@@ -394,6 +417,28 @@ function PageContent() {
                       "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
                     )}
                     required
+                  />
+                </div>
+
+                {/* Item Code */}
+                <div className="flex flex-col">
+                  <label className={getClassName(
+                    darkMode,
+                    "text-xs font-medium mb-1.5 text-gray-300 flex items-center gap-1",
+                    "text-xs font-medium mb-1.5 text-gray-700 flex items-center gap-1"
+                  )}>
+                    <Package className="w-3.5 h-3.5" /> Item Code
+                  </label>
+                  <input
+                    type="text"
+                    value={itemCode}
+                    onChange={(e) => setItemCode(e.target.value)}
+                    placeholder="Enter code"
+                    className={getClassName(
+                      darkMode,
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                    )}
                   />
                 </div>
 
@@ -451,43 +496,41 @@ function PageContent() {
                   )}>
                     <Clock className="w-3.5 h-3.5" /> Time In
                   </label>
-                  <div className="flex gap-1">
+                  <div className="flex gap-2">
                     <select
                       value={timeHour}
                       onChange={(e) => setTimeHour(e.target.value)}
-                      className={getClassName(
-                        darkMode,
-                        "border rounded-lg px-2 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
-                        "border rounded-lg px-2 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
-                      )}
+                      className={`border rounded-lg px-2 py-2 flex-1 min-w-[50px] focus:outline-none focus:ring-2 transition-all ${
+                        darkMode
+                          ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
+                          : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
+                      }`}
                     >
-                      {Array.from({ length: 12 }, (_, i) => i + 1).map((hour) => (
-                        <option key={hour} value={hour}>{hour}</option>
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
+                        <option key={h} value={h}>{h}</option>
                       ))}
                     </select>
-                    <span className="self-center text-sm">:</span>
                     <select
                       value={timeMinute}
                       onChange={(e) => setTimeMinute(e.target.value)}
-                      className={getClassName(
-                        darkMode,
-                        "border rounded-lg px-2 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
-                        "border rounded-lg px-2 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
-                      )}
+                      className={`border rounded-lg px-2 py-2 flex-1 min-w-[50px] focus:outline-none focus:ring-2 transition-all ${
+                        darkMode
+                          ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
+                          : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
+                      }`}
                     >
-                      <option value="00">00</option>
-                      <option value="15">15</option>
-                      <option value="30">30</option>
-                      <option value="45">45</option>
+                      {Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, "0")).map((m) => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
                     </select>
                     <select
                       value={timeAMPM}
                       onChange={(e) => setTimeAMPM(e.target.value)}
-                      className={getClassName(
-                        darkMode,
-                        "border rounded-lg px-2 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
-                        "border rounded-lg px-2 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
-                      )}
+                      className={`border rounded-lg px-2 py-2 w-[60px] min-w-[60px] shrink-0 focus:outline-none focus:ring-2 transition-all ${
+                        darkMode
+                          ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
+                          : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
+                      }`}
                     >
                       <option value="AM">AM</option>
                       <option value="PM">PM</option>
@@ -808,7 +851,7 @@ function PageContent() {
                           style={{ animationDelay: `${index * 0.1}s` }}
                         >
                           <td className="p-3 sm:p-4 text-center align-middle text-xs sm:text-sm whitespace-nowrap">
-                            {buildProductCode(item, "CMP")}
+                            {item.item_code || buildProductCode(item, "CMP")}
                           </td>
                           <td className="p-3 sm:p-4 font-semibold text-sm sm:text-base whitespace-nowrap text-center align-middle">
                             {item.name}

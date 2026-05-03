@@ -7,7 +7,8 @@ import ActionModal from "./ActionModal";
 const toIntOr = (value, fallback) => {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
-  return Math.max(1, Math.floor(parsed));
+  // Allow 0 as valid value for manual input mode
+  return Math.max(0, Math.floor(parsed));
 };
 
 export default function StockThresholdModal({
@@ -20,14 +21,16 @@ export default function StockThresholdModal({
   onSave,
   onReset,
 }) {
-  const [critical, setCritical] = useState(defaultThresholds?.critical || 5);
-  const [low, setLow] = useState(defaultThresholds?.low || 10);
+  // Default to 0-0 (manual input mode)
+  const [critical, setCritical] = useState(defaultThresholds?.critical ?? 0);
+  const [low, setLow] = useState(defaultThresholds?.low ?? 0);
   const [formError, setFormError] = useState("");
 
   useEffect(() => {
     if (!open) return;
-    setCritical(toIntOr(currentThreshold?.critical, defaultThresholds?.critical || 5));
-    setLow(toIntOr(currentThreshold?.low, defaultThresholds?.low || 10));
+    // Default to 0-0 if no values set
+    setCritical(toIntOr(currentThreshold?.critical, defaultThresholds?.critical ?? 0));
+    setLow(toIntOr(currentThreshold?.low, defaultThresholds?.low ?? 0));
     setFormError("");
   }, [open, currentThreshold, defaultThresholds]);
 
@@ -39,10 +42,11 @@ export default function StockThresholdModal({
       : thresholdTarget.item?.product_name;
 
   const handleSave = () => {
-    const safeCritical = toIntOr(critical, defaultThresholds?.critical || 5);
-    const safeLow = toIntOr(low, defaultThresholds?.low || 10);
+    const safeCritical = toIntOr(critical, defaultThresholds?.critical ?? 0);
+    const safeLow = toIntOr(low, defaultThresholds?.low ?? 0);
 
-    if (safeLow <= safeCritical) {
+    // Only enforce low > critical if both are > 0
+    if (safeCritical > 0 && safeLow > 0 && safeLow <= safeCritical) {
       setFormError("Low stock threshold must be greater than critical threshold.");
       return;
     }
@@ -71,7 +75,7 @@ export default function StockThresholdModal({
                 : "bg-white border border-[#D1D5DB] text-gray-700 hover:bg-gray-50"
             }`}
           >
-            Use System Default
+            Reset to 0-0
           </button>
           <div className="flex items-center gap-2">
             <button
@@ -104,13 +108,11 @@ export default function StockThresholdModal({
         }`}
       >
         <p className={`text-sm ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
-          Default system thresholds are:
-          <span className="font-semibold"> Critical at {defaultThresholds?.critical ?? 5}</span>
-          <span> and </span>
-          <span className="font-semibold">Low at {defaultThresholds?.low ?? 10}</span>.
+          Set manual thresholds for this item. Default is
+          <span className="font-semibold"> 0-0</span> (no alerts).
         </p>
         <p className={`text-xs mt-1 ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
-          Out of stock remains fixed at 0. These values only control the item's low/critical health levels.
+          Leave both at 0 to disable low/critical alerts. Out of stock is always triggered at 0.
         </p>
       </div>
 
@@ -125,7 +127,7 @@ export default function StockThresholdModal({
           </label>
           <input
             type="number"
-            min={1}
+            min={0}
             value={critical}
             onChange={(e) => setCritical(e.target.value)}
             className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm ${
@@ -145,7 +147,7 @@ export default function StockThresholdModal({
           </label>
           <input
             type="number"
-            min={2}
+            min={0}
             value={low}
             onChange={(e) => setLow(e.target.value)}
             className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all text-sm ${

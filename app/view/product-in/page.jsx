@@ -91,6 +91,7 @@ export default function ProductInPage() {
   const [description, setDescription] = useState("");
   const [qty, setQty] = useState(1);
   const [price, setPrice] = useState(0);
+  const [productCode, setProductCode] = useState("");
   const [date, setDate] = useState("");
   const [timeHour, setTimeHour] = useState("1");
   const [timeMinute, setTimeMinute] = useState("00");
@@ -219,18 +220,21 @@ export default function ProductInPage() {
     const savedDarkMode = localStorage.getItem("darkMode");
     if (savedDarkMode !== null) setDarkMode(savedDarkMode === "true");
 
-    const now = new Date();
-    let hour = now.getHours();
-    const minute = now.getMinutes();
-    const ampm = hour >= 12 ? "PM" : "AM";
-    hour = hour % 12 || 12;
-    setTimeHour(hour.toString());
-    setTimeMinute(minute < 10 ? `0${minute}` : `${minute}`);
-    setTimeAMPM(ampm);
+    // Only set current time if not coming from URL params (no productParam)
+    if (!productParam) {
+      const now = new Date();
+      let hour = now.getHours();
+      const minute = now.getMinutes();
+      const ampm = hour >= 12 ? "PM" : "AM";
+      hour = hour % 12 || 12;
+      setTimeHour(hour.toString());
+      setTimeMinute(minute < 10 ? `0${minute}` : `${minute}`);
+      setTimeAMPM(ampm);
+    }
 
     loadItems();
     loadStockInItems();
-  }, []);
+  }, [productParam]);
 
   const loadItems = async () => {
     const data = await fetchProductInController();
@@ -519,6 +523,7 @@ export default function ProductInPage() {
     setDescription("");
     setQty(1);
     setPrice(0);
+    setProductCode("");
     setDate("");
     setTimeHour("1");
     setTimeMinute("00");
@@ -700,6 +705,7 @@ export default function ProductInPage() {
         description: description.trim(),
         price: totalPrice,
         category: categoryValue || singleCategory,
+        product_code: productCode.trim() || null,
       },
     );
 
@@ -769,6 +775,7 @@ export default function ProductInPage() {
     setDescription("");
     setQty(1);
     setPrice(0);
+    setProductCode("");
     setDate("");
     setTimeHour("1");
     setTimeMinute("00");
@@ -1150,14 +1157,19 @@ export default function ProductInPage() {
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 xl:grid-cols-8 gap-2.5 mb-4">
-                  <div className="lg:col-span-2 xl:col-span-3">
+                <div className="flex items-center gap-2 mb-6">
+                  <Plus className={`w-5 h-5 ${darkMode ? "text-[#3B82F6]" : "text-[#1E3A8A]"}`} />
+                  <h2 className="text-lg font-semibold">Add Product IN</h2>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-4">
+                  <div>
                     <label
-                      className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
+                      className={`block text-sm font-medium mb-2 ${
                         darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
                       }`}
                     >
-                      <Package className="w-4 h-4" /> Product Name
+                      Product Name
                     </label>
                     <input
                       type="text"
@@ -1168,7 +1180,7 @@ export default function ProductInPage() {
                         setPrice(0);
                       }}
                       list="product-in-suggestions"
-                      className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all ${
+                      className={`border rounded-lg px-4 py-2 w-full focus:outline-none focus:ring-2 transition-all ${
                         darkMode
                           ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
                           : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
@@ -1189,13 +1201,13 @@ export default function ProductInPage() {
                     )}
                   </div>
 
-                  <div className="lg:col-span-2">
+                  <div>
                     <label
-                      className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
+                      className={`block text-sm font-medium mb-2 ${
                         darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
                       }`}
                     >
-                      <Package className="w-4 h-4" /> Description
+                      Description
                     </label>
                     <input
                       type="text"
@@ -1203,7 +1215,7 @@ export default function ProductInPage() {
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
                       list="product-in-description-suggestions"
-                      className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all ${
+                      className={`border rounded-lg px-4 py-2 w-full focus:outline-none focus:ring-2 transition-all ${
                         darkMode
                           ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
                           : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
@@ -1216,20 +1228,20 @@ export default function ProductInPage() {
                     </datalist>
                   </div>
 
-                  <div className="lg:col-span-1">
+                  <div>
                     <label
-                      className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
+                      className={`block text-sm font-medium mb-2 ${
                         darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
                       }`}
                     >
-                      <Package className="w-4 h-4" /> Price
+                      Price
                     </label>
                     <input
                       type="number"
                       min="0"
                       value={price}
                       onChange={(e) => setPrice(e.target.value)}
-                      className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all ${
+                      className={`border rounded-lg px-4 py-2 w-full focus:outline-none focus:ring-2 transition-all ${
                         darkMode
                           ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
                           : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
@@ -1238,20 +1250,41 @@ export default function ProductInPage() {
                     />
                   </div>
 
-                  <div className="lg:col-span-1">
+                  <div>
                     <label
-                      className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
+                      className={`block text-sm font-medium mb-2 ${
                         darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
                       }`}
                     >
-                      <Package className="w-4 h-4" /> Quantity
+                      Product Code
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Enter code"
+                      value={productCode}
+                      onChange={(e) => setProductCode(e.target.value)}
+                      className={`border rounded-lg px-4 py-2 w-full focus:outline-none focus:ring-2 transition-all ${
+                        darkMode
+                          ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
+                          : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
+                      }`}
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      className={`block text-sm font-medium mb-2 ${
+                        darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
+                      }`}
+                    >
+                      Quantity
                     </label>
                     <input
                       type="number"
                       min="1"
                       value={qty}
                       onChange={(e) => setQty(e.target.value)}
-                      className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all ${
+                      className={`border rounded-lg px-4 py-2 w-full focus:outline-none focus:ring-2 transition-all ${
                         darkMode
                           ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
                           : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
@@ -1260,19 +1293,19 @@ export default function ProductInPage() {
                     />
                   </div>
 
-                  <div className="lg:col-span-1">
+                  <div>
                     <label
-                      className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
+                      className={`block text-sm font-medium mb-2 ${
                         darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
                       }`}
                     >
-                      <Calendar className="w-4 h-4" /> Date
+                      Date
                     </label>
                     <input
                       type="date"
                       value={date}
                       onChange={(e) => setDate(e.target.value)}
-                      className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all ${
+                      className={`border rounded-lg px-4 py-2 w-full focus:outline-none focus:ring-2 transition-all ${
                         darkMode
                           ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
                           : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
@@ -1281,18 +1314,18 @@ export default function ProductInPage() {
                     />
                   </div>
 
-                  <div className="md:col-span-2 lg:col-span-2 xl:col-span-2">
+                  <div>
                     <label
-                      className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
+                      className={`block text-sm font-medium mb-2 ${
                         darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
                       }`}
                     >
-                      <Package className="w-4 h-4" /> Category
+                      Category
                     </label>
                     <select
                       value={singleCategory}
                       onChange={(e) => setSingleCategory(e.target.value)}
-                      className={`border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 transition-all ${
+                      className={`border rounded-lg px-4 py-2 w-full focus:outline-none focus:ring-2 transition-all ${
                         darkMode
                           ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
                           : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
@@ -1306,19 +1339,19 @@ export default function ProductInPage() {
                     </select>
                   </div>
 
-                  <div className="md:col-span-2 lg:col-span-2 xl:col-span-2">
+                  <div>
                     <label
-                      className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
+                      className={`block text-sm font-medium mb-2 ${
                         darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
                       }`}
                     >
-                      <Clock className="w-4 h-4" /> Time In
+                      Time In
                     </label>
-                    <div className="flex gap-3">
+                    <div className="flex gap-2">
                       <select
                         value={timeHour}
                         onChange={(e) => setTimeHour(e.target.value)}
-                        className={`border rounded-lg px-3 py-2 flex-1 min-w-[72px] focus:outline-none focus:ring-2 transition-all ${
+                        className={`border rounded-lg px-2 py-2 flex-1 min-w-[50px] focus:outline-none focus:ring-2 transition-all ${
                           darkMode
                             ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
                             : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
@@ -1333,7 +1366,7 @@ export default function ProductInPage() {
                       <select
                         value={timeMinute}
                         onChange={(e) => setTimeMinute(e.target.value)}
-                        className={`border rounded-lg px-3 py-2 flex-1 min-w-[72px] focus:outline-none focus:ring-2 transition-all ${
+                        className={`border rounded-lg px-2 py-2 flex-1 min-w-[50px] focus:outline-none focus:ring-2 transition-all ${
                           darkMode
                             ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
                             : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
@@ -1351,7 +1384,7 @@ export default function ProductInPage() {
                       <select
                         value={timeAMPM}
                         onChange={(e) => setTimeAMPM(e.target.value)}
-                        className={`border rounded-lg px-3 py-2 w-[88px] min-w-[88px] shrink-0 focus:outline-none focus:ring-2 transition-all ${
+                        className={`border rounded-lg px-2 py-2 w-[60px] min-w-[60px] shrink-0 focus:outline-none focus:ring-2 transition-all ${
                           darkMode
                             ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
                             : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
@@ -1532,7 +1565,7 @@ export default function ProductInPage() {
                             style={{ animationDelay: `${index * 0.03}s` }}
                           >
                             <td className="px-4 py-3 text-center align-middle text-xs sm:text-sm whitespace-nowrap w-[140px] min-w-[140px]">
-                              {buildProductCode(item)}
+                              {item.product_code || buildProductCode(item)}
                             </td>
 
                             <td className="px-4 py-3 text-center align-middle font-semibold text-sm sm:text-base whitespace-nowrap w-[150px] min-w-[150px]">

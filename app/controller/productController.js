@@ -70,6 +70,7 @@ export const handleAddMultipleProductsIn = async (productsData) => {
       description: meta.description || null,
       price: meta.price,
       category: meta.category || 'Others',
+      product_code: meta.product_code || null,
     });
 
     if (result?.__error || !result) {
@@ -145,6 +146,7 @@ export const handleAddProductIn = async (
     description: meta.description || null,
     price: meta.price,
     category: meta.category || 'Others',
+    product_code: meta.product_code || null,
   });
 
   if (result?.__error) {

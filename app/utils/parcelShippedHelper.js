@@ -36,6 +36,7 @@ export const fetchParcelItems = async () => {
         client_name: item.client_name,
         price: item.price,
         category: displayCategory,
+        item_code: item.item_code,
       };
     });
   } catch (err) {
@@ -54,6 +55,7 @@ export const addParcelItem = async ({
   client_name,
   price,
   category,
+  item_code,
 }) => {
   try {
     // Use category directly since we're now using the correct format
@@ -71,6 +73,7 @@ export const addParcelItem = async ({
           ? null
           : Number(price),
       category: dbCategory, // Use mapped category for database
+      item_code: item_code || null,
     });
     return {
       id: res.data.id,
@@ -82,6 +85,7 @@ export const addParcelItem = async ({
       client_name: res.data.client_name,
       price: res.data.price,
       category: category, // Keep original category for display
+      item_code: res.data.item_code,
     };
   } catch (err) {
     console.error(err.response?.data || err.message);
@@ -101,6 +105,7 @@ export const handleAddParcelIn = async ({
   client_name,
   price,
   category,
+  item_code,
 }) => {
   const timeString = `${timeHour}:${timeMinute} ${timeAMPM}`;
   const newItem = await addParcelItem({
@@ -112,6 +117,7 @@ export const handleAddParcelIn = async ({
     client_name,
     price,
     category,
+    item_code,
   });
   if (!newItem) return null;
 
@@ -138,6 +144,7 @@ export const updateParcelInItemHelper = async (id, updates = {}) => {
       client_name: data.client_name,
       price: data.price,
       category: data.category,
+      item_code: data.item_code,
     };
   } catch (err) {
     console.error(
