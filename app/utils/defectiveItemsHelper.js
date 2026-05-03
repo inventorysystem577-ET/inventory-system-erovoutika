@@ -164,8 +164,8 @@ export const deleteDefectiveItem = async (recordId, restoreInventory = false) =>
   }
 };
 
-// Mark defective item as fixed and return to inventory
-export const markDefectiveItemAsFixed = async (recordId) => {
+// Mark defective item as fixed and return specified quantity to inventory
+export const markDefectiveItemAsFixed = async (recordId, fixedQuantity = null) => {
   try {
     const defectiveItems = getDefectiveItems();
     const record = defectiveItems.find((item) => item.id === recordId);
@@ -179,15 +179,46 @@ export const markDefectiveItemAsFixed = async (recordId) => {
       return { success: false, error: "Item is already marked as fixed" };
     }
     
-    // Update the record status to fixed
-    const updatedItems = defectiveItems.map((item) =>
-      item.id === recordId
-        ? { ...item, status: "fixed", fixedAt: new Date().toISOString() }
-        : item
-    );
+    // If no fixedQuantity provided, fix all (backward compatibility)
+    const actualFixedQty = fixedQuantity !== null ? Number(fixedQuantity) : Number(record.quantity);
+    const remainingDefectiveQty = Number(record.quantity) - actualFixedQty;
+    
+    // Validate fixed quantity
+    if (actualFixedQty <= 0 || actualFixedQty > Number(record.quantity)) {
+      return { success: false, error: "Invalid fixed quantity" };
+    }
+    
+    // Update the record
+    let updatedItems;
+    if (remainingDefectiveQty === 0) {
+      // All items fixed - mark as completely fixed
+      updatedItems = defectiveItems.map((item) =>
+        item.id === recordId
+          ? { ...item, status: "fixed", fixedAt: new Date().toISOString(), fixedQuantity: actualFixedQty }
+          : item
+      );
+    } else {
+      // Partial fix - update quantity and add fix history
+      updatedItems = defectiveItems.map((item) =>
+        item.id === recordId
+          ? { 
+              ...item, 
+              quantity: remainingDefectiveQty,
+              fixHistory: [
+                ...(item.fixHistory || []),
+                { 
+                  fixedQuantity: actualFixedQty, 
+                  fixedAt: new Date().toISOString(),
+                  remainingDefective: remainingDefectiveQty
+                }
+              ]
+            }
+          : item
+      );
+    }
     saveDefectiveItems(updatedItems);
     
-    // Restore inventory quantity
+    // Restore inventory quantity (only for the fixed amount)
     const { getParcelInItems, updateParcelInItem } = await import("../models/parcelShippedModel");
     const inventoryResult = await getParcelInItems();
     const inventoryItems = inventoryResult.data || [];
@@ -202,26 +233,38 @@ export const markDefectiveItemAsFixed = async (recordId) => {
     
     if (inventoryItem) {
       const currentQty = Number(inventoryItem.quantity) || 0;
-      const restoredQty = Number(record.quantity) || 0;
       
       await updateParcelInItem(inventoryItem.id, {
         ...inventoryItem,
-        quantity: currentQty + restoredQty,
+        quantity: currentQty + actualFixedQty,
       });
+      
+      const message = remainingDefectiveQty === 0
+        ? `Item marked as fixed and ${actualFixedQty} units restored to inventory`
+        : `${actualFixedQty} units marked as fixed and restored to inventory. ${remainingDefectiveQty} units remain defective.`;
       
       return {
         success: true,
-        message: `Item marked as fixed and ${restoredQty} units restored to inventory`,
-        restoredQty: restoredQty,
-        newTotalQty: currentQty + restoredQty,
+        message,
+        fixedQuantity: actualFixedQty,
+        remainingDefective: remainingDefectiveQty,
+        newTotalQty: currentQty + actualFixedQty,
+        isPartialFix: remainingDefectiveQty > 0,
       };
     }
     
     // If item not found in inventory, just mark as fixed without restoring
+    const message = remainingDefectiveQty === 0
+      ? "Item marked as fixed (inventory item not found - quantity not restored)"
+      : `${actualFixedQty} units marked as fixed. ${remainingDefectiveQty} units remain defective (inventory item not found)`;
+    
     return {
       success: true,
-      message: "Item marked as fixed (inventory item not found - quantity not restored)",
+      message,
       warning: "Original inventory item not found",
+      fixedQuantity: actualFixedQty,
+      remainingDefective: remainingDefectiveQty,
+      isPartialFix: remainingDefectiveQty > 0,
     };
   } catch (error) {
     console.error("Error marking defective item as fixed:", error);

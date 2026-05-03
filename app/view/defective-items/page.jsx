@@ -27,6 +27,7 @@ import {
 } from "../../utils/defectiveItemsHelper";
 import { fetchParcelItems } from "../../utils/parcelShippedHelper";
 import { CATEGORIES, CATEGORY_OPTIONS } from "../../utils/categoryUtils";
+import { detectCategory } from "../../utils/categoryDetection";
 
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -62,6 +63,8 @@ export default function Page() {
   
   // Marking fixed state
   const [isMarkingFixed, setIsMarkingFixed] = useState(null);
+  const [fixedQuantityModal, setFixedQuantityModal] = useState({ open: false, recordId: null, maxQuantity: 0 });
+  const [fixedQuantity, setFixedQuantity] = useState(1);
 
   useEffect(() => {
     const savedDarkMode = localStorage.getItem("darkMode");
@@ -181,10 +184,23 @@ export default function Page() {
   };
 
   // Handle marking defective item as fixed
-  const handleMarkAsFixed = async (recordId) => {
+  const handleMarkAsFixed = (recordId, maxQuantity) => {
+    setFixedQuantityModal({ open: true, recordId, maxQuantity });
+    setFixedQuantity(1); // Reset to 1
+  };
+
+  // Handle confirming the fix with quantity
+  const handleConfirmFix = async () => {
+    const { recordId, maxQuantity } = fixedQuantityModal;
+    
+    if (fixedQuantity < 1 || fixedQuantity > maxQuantity) {
+      alert(`Please enter a valid quantity between 1 and ${maxQuantity}`);
+      return;
+    }
+    
     const confirmed = window.confirm(
-      "Mark this item as fixed?\n\n" +
-      "This will return the quantity to inventory."
+      `Mark ${fixedQuantity} unit(s) as fixed and return to inventory?\n\n` +
+      `${maxQuantity - fixedQuantity} unit(s) will remain defective.`
     );
     
     if (!confirmed) return;
@@ -192,10 +208,11 @@ export default function Page() {
     setIsMarkingFixed(recordId);
     
     try {
-      const result = await markDefectiveItemAsFixed(recordId);
+      const result = await markDefectiveItemAsFixed(recordId, fixedQuantity);
       
       if (result.success) {
         alert(result.message);
+        setFixedQuantityModal({ open: false, recordId: null, maxQuantity: 0 });
         await loadData();
       } else {
         alert(result.error || "Failed to mark item as fixed");
@@ -206,6 +223,12 @@ export default function Page() {
     } finally {
       setIsMarkingFixed(null);
     }
+  };
+
+  // Handle closing the modal
+  const handleCloseFixModal = () => {
+    setFixedQuantityModal({ open: false, recordId: null, maxQuantity: 0 });
+    setFixedQuantity(1);
   };
 
   // Filter records by search
@@ -231,6 +254,15 @@ export default function Page() {
   const getAvailableQty = () => {
     const item = inventoryItems.find((i) => i.name === selectedItem);
     return item ? item.quantity : 0;
+  };
+
+  // Auto-detect category when item is selected
+  const handleItemSelection = (itemName) => {
+    setSelectedItem(itemName);
+    
+    // Auto-detect category based on item name
+    const detectedCategory = detectCategory(itemName);
+    setSelectedCategory(detectedCategory);
   };
 
   return (
@@ -434,7 +466,7 @@ export default function Page() {
                     </label>
                     <select
                       value={selectedItem}
-                      onChange={(e) => setSelectedItem(e.target.value)}
+                      onChange={(e) => handleItemSelection(e.target.value)}
                       className={`border rounded-lg px-4 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
                         darkMode
                           ? "border-[#374151] focus:ring-[#EF4444] focus:border-[#EF4444] bg-[#111827] text-white"
@@ -499,6 +531,13 @@ export default function Page() {
                       }`}
                     >
                       <Package className="w-4 h-4" /> Category
+                      {selectedItem && selectedCategory === detectCategory(selectedItem) && (
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          darkMode ? "bg-blue-500/20 text-blue-400" : "bg-blue-100 text-blue-600"
+                        }`}>
+                          Auto-detected
+                        </span>
+                      )}
                     </label>
                     <select
                       value={selectedCategory}
@@ -515,6 +554,17 @@ export default function Page() {
                         </option>
                       ))}
                     </select>
+                    {selectedItem && (
+                      <p
+                        className={`text-xs mt-1 ${
+                          darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"
+                        }`}
+                      >
+                        {selectedCategory === detectCategory(selectedItem) 
+                          ? "Category automatically detected based on item name" 
+                          : "Category manually selected"}
+                      </p>
+                    )}
                   </div>
 
                   {/* Date */}
@@ -744,7 +794,7 @@ export default function Page() {
                             <div className="flex items-center justify-center gap-2">
                               {record.status !== "fixed" && (
                                 <button
-                                  onClick={() => handleMarkAsFixed(record.id)}
+                                  onClick={() => handleMarkAsFixed(record.id, record.quantity)}
                                   disabled={isMarkingFixed === record.id}
                                   className={`p-2 rounded-lg transition-all ${
                                     isMarkingFixed === record.id
@@ -855,6 +905,84 @@ export default function Page() {
                 </div>
               )}
             </div>
+
+            {/* Fixed Quantity Modal */}
+            {fixedQuantityModal.open && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate__animated animate__fadeIn">
+                <div className={`rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl animate__animated animate__fadeInUp ${
+                  darkMode ? "bg-[#1F2937] border border-[#374151]" : "bg-white border border-[#E5E7EB]"
+                }`}>
+                  <div className="flex items-center gap-2 mb-4">
+                    <CheckCircle2 className={`w-5 h-5 ${darkMode ? "text-green-400" : "text-green-600"}`} />
+                    <h3 className={`text-lg font-semibold ${darkMode ? "text-white" : "text-gray-900"}`}>
+                      Mark Items as Fixed
+                    </h3>
+                  </div>
+                  
+                  <p className={`text-sm mb-4 ${darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"}`}>
+                    How many units were actually fixed? (Max: {fixedQuantityModal.maxQuantity})
+                  </p>
+                  
+                  <div className="mb-6">
+                    <label className={`block text-sm font-medium mb-2 ${darkMode ? "text-[#D1D5DB]" : "text-[#374151]"}`}>
+                      Fixed Quantity
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max={fixedQuantityModal.maxQuantity}
+                      value={fixedQuantity}
+                      onChange={(e) => setFixedQuantity(Math.max(1, Math.min(fixedQuantityModal.maxQuantity, parseInt(e.target.value) || 1)))}
+                      className={`w-full border rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 transition-all ${
+                        darkMode
+                          ? "border-[#374151] focus:ring-green-500 focus:border-green-500 bg-[#111827] text-white"
+                          : "border-[#D1D5DB] focus:ring-green-500 focus:border-green-500 bg-white text-black"
+                      }`}
+                    />
+                    <p className={`text-xs mt-1 ${darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"}`}>
+                      {fixedQuantityModal.maxQuantity - fixedQuantity} unit(s) will remain defective
+                    </p>
+                  </div>
+                  
+                  <div className="flex justify-end gap-3">
+                    <button
+                      onClick={handleCloseFixModal}
+                      disabled={isMarkingFixed}
+                      className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                        darkMode
+                          ? "bg-[#374151] hover:bg-[#4B5563] text-white"
+                          : "bg-gray-200 hover:bg-gray-300 text-gray-800"
+                      } ${isMarkingFixed ? "opacity-50 cursor-not-allowed" : ""}`}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleConfirmFix}
+                      disabled={isMarkingFixed}
+                      className={`px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-2 ${
+                        isMarkingFixed
+                          ? "bg-gray-400 cursor-not-allowed text-white"
+                          : darkMode
+                            ? "bg-green-600 hover:bg-green-700 text-white"
+                            : "bg-green-600 hover:bg-green-700 text-white"
+                      }`}
+                    >
+                      {isMarkingFixed ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-4 h-4" />
+                          Confirm Fix
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </main>
       </div>
