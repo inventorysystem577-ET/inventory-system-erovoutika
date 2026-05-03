@@ -1,5 +1,8 @@
 "use client";
 
+// Force dynamic rendering to avoid pre-rendering issues with useSearchParams
+export const dynamic = "force-dynamic";
+
 import React, { useState, useEffect, Suspense } from "react";
 import AuthGuard from "../../components/AuthGuard";
 import TopNavbar from "../../components/TopNavbar";

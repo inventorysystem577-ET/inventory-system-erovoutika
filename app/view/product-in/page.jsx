@@ -1,6 +1,9 @@
 /* eslint-disable react-hooks/rules-of-hooks */
 "use client";
 
+// Force dynamic rendering to avoid pre-rendering issues with useSearchParams
+export const dynamic = "force-dynamic";
+
 import React, { useState, useEffect } from "react";
 import TopNavbar from "../../components/TopNavbar";
 import { logActivity } from "../../utils/logActivity";

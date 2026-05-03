@@ -1,6 +1,9 @@
 /* eslint-disable react-hooks/rules-of-hooks */
 "use client";
 
+// Force dynamic rendering to avoid pre-rendering issues with useSearchParams
+export const dynamic = "force-dynamic";
+
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
