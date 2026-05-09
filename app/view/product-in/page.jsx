@@ -696,15 +696,24 @@ export default function ProductInPage() {
     setAlternativeRequest(null);
 
     // Enhanced validation for product codes - ensure unique codes and one code per product
-    if (productCode) {
+    console.log('Debug - Products data:', products);
+    console.log('Debug - Current productCode:', productCode);
+    console.log('Debug - Current productName:', productName);
+    
+    if (productCode && productCode.trim()) {
       // Check if product code already exists with different product name
       const existingProducts = products || [];
+      console.log('Debug - Filtered existingProducts:', existingProducts);
+      
       const duplicateCode = existingProducts.find(existingProduct => 
         existingProduct.product_code === productCode.trim() && existingProduct.product_name !== productName
       );
       
+      console.log('Debug - Found duplicateCode:', duplicateCode);
+      
       if (duplicateCode) {
-        setErrorBar(`Product code "${productCode}" is already assigned to product "${duplicateCode.product_name}". Each product must have a unique code. Please use a different product code.`);
+        console.log('Debug - Setting error bar for duplicate code');
+        setErrorBar(`⚠️ Code Already Exists!\n\nProduct code "${productCode}" is already assigned to product "${duplicateCode.product_name}".\n\nEach product must have a unique code. Please:\n• Use a different product code, OR\n• Use the existing product instead`);
         return;
       }
     }
@@ -717,7 +726,7 @@ export default function ProductInPage() {
       );
       
       if (existingWithDifferentCode) {
-        setErrorBar(`Product "${productName}" already exists with product code "${existingWithDifferentCode.product_code}". Each product can only have one code. Please use the existing product code or update the existing product.`);
+        setErrorBar(`⚠️ Product Already Exists!\n\nProduct "${productName}" already exists with product code "${existingWithDifferentCode.product_code}".\n\nEach product can only have one code. Please:\n• Use the existing product code "${existingWithDifferentCode.product_code}", OR\n• Update the existing product instead`);
         return;
       }
     }
@@ -874,7 +883,7 @@ export default function ProductInPage() {
           );
           
           if (duplicateCodeInBatch) {
-            validationErrors.push(`Row ${index + 1}: product code "${rowProductCode}" is already assigned to product "${duplicateCodeInBatch.product_name}" in this batch. Each product must have a unique code.`);
+            validationErrors.push(`⚠️ Row ${index + 1}: Duplicate Code in Batch!\nProduct code "${rowProductCode}" is already assigned to product "${duplicateCodeInBatch.product_name}" in this batch.\nEach product must have a unique code. Please use a different product code.`);
             return;
           }
           
@@ -885,7 +894,7 @@ export default function ProductInPage() {
           );
           
           if (existingCode) {
-            validationErrors.push(`Row ${index + 1}: product code "${rowProductCode}" is already assigned to product "${existingCode.product_name}". Each product must have a unique code. Please use a different product code.`);
+            validationErrors.push(`⚠️ Row ${index + 1}: Code Already Exists!\nProduct code "${rowProductCode}" is already assigned to product "${existingCode.product_name}".\nEach product must have a unique code. Please use a different product code.`);
             return;
           }
         }
@@ -898,7 +907,7 @@ export default function ProductInPage() {
           );
           
           if (existingWithDifferentCode) {
-            validationErrors.push(`Row ${index + 1}: product "${productName}" already exists with product code "${existingWithDifferentCode.product_code}". Each product can only have one code. Please use the existing product code or update the existing product.`);
+            validationErrors.push(`⚠️ Row ${index + 1}: Product Already Exists!\nProduct "${productName}" already exists with product code "${existingWithDifferentCode.product_code}".\nEach product can only have one code. Please use the existing product code or update the existing product.`);
             return;
           }
           
@@ -910,7 +919,7 @@ export default function ProductInPage() {
           );
           
           if (duplicateNameInBatch) {
-            validationErrors.push(`Row ${index + 1}: product "${productName}" appears multiple times with different codes ("${rowProductCode}" and "${duplicateNameInBatch.productCode}"). Each product can only have one code. Please use consistent codes.`);
+            validationErrors.push(`⚠️ Row ${index + 1}: Same Product, Different Codes!\nProduct "${productName}" appears multiple times with different codes:\n• "${rowProductCode}"\n• "${duplicateNameInBatch.productCode}"\nEach product can only have one code. Please use consistent codes.`);
             return;
           }
         }

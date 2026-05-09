@@ -253,15 +253,24 @@ function PageContent() {
 
     // Enhanced validation for single input mode - ensure unique codes and one code per item
     if (isSingleInput) {
+      // Debug: Check if items data is loaded
+      console.log('Debug - Items data:', items);
+      console.log('Debug - Current itemCode:', itemCode);
+      console.log('Debug - Current name:', name);
+      
       // If manual code is provided, ensure it's unique
-      if (itemCode) {
+      if (itemCode && itemCode.trim()) {
         const existingItems = items.filter(item => item.item_name && item.item_name !== name);
+        console.log('Debug - Filtered existingItems:', existingItems);
+        
         const duplicateCode = existingItems.find(existingItem => 
-          existingItem.item_code && existingItem.item_code === itemCode
+          existingItem.item_code && existingItem.item_code === itemCode.trim()
         );
         
+        console.log('Debug - Found duplicateCode:', duplicateCode);
+        
         if (duplicateCode) {
-          alert(`Item code "${itemCode}" is already assigned to item "${duplicateCode.item_name}". Each item must have a unique code. Please use a different item code.`);
+          alert(`⚠️ Code Already Exists!\n\nItem code "${itemCode}" is already assigned to item "${duplicateCode.item_name}".\n\nEach item must have a unique code. Please:\n• Use a different item code, OR\n• Use the existing item instead`);
           return;
         }
       }
@@ -273,7 +282,7 @@ function PageContent() {
         );
         
         if (existingWithDifferentCode) {
-          alert(`Item "${name}" already exists with item code "${existingWithDifferentCode.item_code}". Each item can only have one code. Please use the existing item code or update the existing item.`);
+          alert(`⚠️ Item Already Exists!\n\nItem "${name}" already exists with item code "${existingWithDifferentCode.item_code}".\n\nEach item can only have one code. Please:\n• Use the existing item code "${existingWithDifferentCode.item_code}", OR\n• Update the existing item instead`);
           return;
         }
       }
@@ -291,7 +300,7 @@ function PageContent() {
       
       if (duplicateCodes.length > 0) {
         const duplicate = duplicateCodes[0];
-        alert(`Item code "${duplicate.itemCode}" is already assigned to item "${duplicate.name}" in this batch. Each item must have a unique code. Please use a different item code.`);
+        alert(`⚠️ Duplicate Code in Batch!\n\nItem code "${duplicate.itemCode}" is already assigned to item "${duplicate.name}" in this batch.\n\nEach item must have a unique code. Please:\n• Use a different item code for this item, OR\n• Remove the duplicate from this batch`);
         return;
       }
       
@@ -305,7 +314,7 @@ function PageContent() {
       if (duplicateNames.length > 0) {
         const duplicate = duplicateNames[0];
         const conflictingItem = parcelsToProcess.find(r => r.name === duplicate.name && r.itemCode !== duplicate.itemCode);
-        alert(`Item "${duplicate.name}" appears multiple times with different codes ("${duplicate.itemCode}" and "${conflictingItem.itemCode}"). Each item can only have one code. Please use consistent codes.`);
+        alert(`⚠️ Same Item, Different Codes!\n\nItem "${duplicate.name}" appears multiple times with different codes:\n• "${duplicate.itemCode}"\n• "${conflictingItem.itemCode}"\n\nEach item can only have one code. Please:\n• Use the same code for all instances, OR\n• Remove duplicates from this batch`);
         return;
       }
       
@@ -317,7 +326,7 @@ function PageContent() {
           );
           
           if (existingItem) {
-            alert(`Item "${row.name}" already exists with item code "${existingItem.item_code}". Each item can only have one code. Please use the existing item code or update the existing item.`);
+            alert(`⚠️ Item Already Exists!\n\nItem "${row.name}" already exists with item code "${existingItem.item_code}".\n\nEach item can only have one code. Please:\n• Use the existing item code "${existingItem.item_code}", OR\n• Update the existing item instead`);
             return;
           }
           
@@ -326,7 +335,7 @@ function PageContent() {
           );
           
           if (existingCode) {
-            alert(`Item code "${row.itemCode}" is already assigned to item "${existingCode.item_name}". Each item must have a unique code. Please use a different item code.`);
+            alert(`⚠️ Code Already Exists!\n\nItem code "${row.itemCode}" is already assigned to item "${existingCode.item_name}".\n\nEach item must have a unique code. Please:\n• Use a different item code, OR\n• Use the existing item instead`);
             return;
           }
         }
