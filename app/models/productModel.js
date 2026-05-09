@@ -479,6 +479,7 @@ export const upsertProductIn = async (data) => {
       data.price === "" || data.price === null || data.price === undefined
         ? null
         : Number(data.price),
+    product_code: data.product_code || null,
   };
 
   let lastError = null;
@@ -505,6 +506,15 @@ export const upsertProductIn = async (data) => {
       "description" in payload
     ) {
       const { description, ...nextPayload } = payload;
+      payload = nextPayload;
+      continue;
+    }
+
+    if (
+      isMissingColumnError(insertError, "product_code") &&
+      "product_code" in payload
+    ) {
+      const { product_code, ...nextPayload } = payload;
       payload = nextPayload;
       continue;
     }

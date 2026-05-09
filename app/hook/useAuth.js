@@ -56,6 +56,10 @@ export const useAuth = () => {
         setRole(null);
         setStatus(null);
         setLoading(false);
+        // Clear any remaining auth data
+        localStorage.removeItem('supabase.auth.token');
+        localStorage.removeItem('supabase.auth.refreshToken');
+        sessionStorage.clear();
         router.replace("/");
         return;
       }
@@ -86,6 +90,14 @@ export const useAuth = () => {
         await applySession(session);
       } catch (error) {
         console.error("Error checking session:", error.message);
+        // Handle refresh token errors specifically
+        if (error.message?.includes('Refresh Token Not Found') || 
+            error.message?.includes('Invalid Refresh Token')) {
+          // Clear all auth data and redirect to login
+          await supabase.auth.signOut();
+          localStorage.clear();
+          sessionStorage.clear();
+        }
         await applySession(null);
       }
     };
@@ -94,8 +106,19 @@ export const useAuth = () => {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      applySession(session);
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      try {
+        await applySession(session);
+      } catch (error) {
+        console.error("Error in auth state change:", error.message);
+        if (error.message?.includes('Refresh Token Not Found') || 
+            error.message?.includes('Invalid Refresh Token')) {
+          await supabase.auth.signOut();
+          localStorage.clear();
+          sessionStorage.clear();
+        }
+        await applySession(null);
+      }
     });
 
     return () => {

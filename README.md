@@ -1,36 +1,91 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Inventory System
 
-## Getting Started
+A Next.js 16 + React 19 + Tailwind CSS 4 inventory management system with Supabase backend.
 
-First, run the development server:
+## Prerequisites
+
+- **Node.js**: >= 18.17.0 (recommended: 20.x LTS)
+- **npm**: >= 9.0.0
+
+## Quick Start
+
+### 1. Clone and Install
+
+```bash
+git clone <your-repo-url>
+cd inventory-system
+npm install
+```
+
+### 2. Environment Setup
+
+Copy the example env file and fill in your Supabase credentials:
+
+```bash
+cp .env.example .env.local
+```
+
+Edit `.env.local` with your actual values from [Supabase](https://app.supabase.com/project/_/settings/api):
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
+```
+
+### 3. Run Development Server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+## Common Issues
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### ESLint Errors
+If you see ESLint version conflicts, delete `node_modules` and `package-lock.json`, then reinstall:
+```bash
+rm -rf node_modules package-lock.json
+npm install
+```
 
-## Learn More
+### Missing Environment Variables
+The app will throw an error if Supabase env vars are missing. Make sure `.env.local` exists with the correct values.
 
-To learn more about Next.js, take a look at the following resources:
+### Node Version Mismatch
+If you get Node version errors, use nvm to switch:
+```bash
+nvm install 20
+nvm use 20
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Build for Production
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm run build
+npm start
+```
 
 ## Deploy on Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. Push your code to GitHub
+2. Connect repo to [Vercel](https://vercel.com)
+3. Add environment variables in Vercel dashboard:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+4. Deploy!
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Tech Stack
+
+- **Framework**: Next.js 16 (App Router)
+- **React**: 19.x
+- **Styling**: Tailwind CSS 4
+- **Database**: Supabase
+- **Auth**: Supabase Auth
+- **Icons**: Lucide React
+
+## Learn More
+
+- [Next.js Documentation](https://nextjs.org/docs)
+- [Supabase Documentation](https://supabase.com/docs)
+- [Tailwind CSS Documentation](https://tailwindcss.com/docs)

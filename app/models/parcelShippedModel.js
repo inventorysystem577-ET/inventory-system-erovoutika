@@ -1,7 +1,7 @@
 import { supabase } from "../../lib/supabaseClient";
 
 export const addParcelInItem = async (item) => {
-  const payload = {
+  let payload = {
     item_name: item.item_name,
     date: item.date,
     quantity: Number(item.quantity),
@@ -12,15 +12,31 @@ export const addParcelInItem = async (item) => {
       ? null
       : Number(item.price),
     category: item.category || 'Others',
+    item_code: item.item_code || null,
   };
 
-  const { data, error } = await supabase
-    .from("parcel_in")
-    .insert([payload])
-    .select();
+  let lastError;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { data, error } = await supabase
+      .from("parcel_in")
+      .insert([payload])
+      .select();
 
-  if (error) return { error };
-  return { data };
+    if (!error) return { data };
+    lastError = error;
+
+    // If item_code column doesn't exist, retry without it
+    if (error.message?.includes("item_code") || error.code === "42703") {
+      const { item_code, ...payloadWithoutCode } = payload;
+      payload = payloadWithoutCode;
+      console.warn("item_code column not found, retrying without it");
+      continue;
+    }
+
+    break;
+  }
+
+  return { error: lastError };
 };
 
 export const getParcelInItems = async () => {
@@ -70,7 +86,7 @@ export const restoreParcelInItems = async (rows = []) => {
     return { success: true, insertedCount: 0 };
   }
 
-  const payload = rows.map((row) => ({
+  let payload = rows.map((row) => ({
     item_name: row.item_name,
     date: row.date,
     quantity: Number(row.quantity ?? 0),
@@ -81,13 +97,28 @@ export const restoreParcelInItems = async (rows = []) => {
       row.price === "" || row.price === null || row.price === undefined
         ? null
         : Number(row.price),
+    item_code: row.item_code || null,
   }));
 
-  const { data, error } = await supabase
-    .from("parcel_in")
-    .insert(payload)
-    .select("id");
+  let lastError;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { data, error } = await supabase
+      .from("parcel_in")
+      .insert(payload)
+      .select("id");
 
-  if (error) return { success: false, error };
-  return { success: true, insertedCount: Array.isArray(data) ? data.length : 0 };
+    if (!error) return { success: true, insertedCount: Array.isArray(data) ? data.length : 0 };
+    lastError = error;
+
+    // If item_code column doesn't exist, retry without it
+    if (error.message?.includes("item_code") || error.code === "42703") {
+      payload = payload.map(({ item_code, ...rest }) => rest);
+      console.warn("item_code column not found, retrying without it");
+      continue;
+    }
+
+    break;
+  }
+
+  return { success: false, error: lastError };
 };

@@ -10,6 +10,7 @@ const STAFF_ALLOWED_PATHS = [
   "/view/product-in",
   "/view/item-transfer",
   "/view/stock-in",
+  "/view/stock-out",
   "/view/inventory",
   "/view/dashboard",
 ];

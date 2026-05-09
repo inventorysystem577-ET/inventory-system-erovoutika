@@ -25,6 +25,7 @@ export default function LoginComponents({
           Email
         </label>
         <input
+          key="email-input"
           type="email"
           placeholder="Enter your email"
           value={email}
@@ -47,6 +48,7 @@ export default function LoginComponents({
           </label>
           <div className="relative">
             <input
+              key="password-input"
               type={showPassword ? "text" : "password"}
               placeholder="Enter your password"
               value={password}
@@ -77,6 +79,7 @@ export default function LoginComponents({
             Reason for Access (optional)
           </label>
           <textarea
+            key="reason-textarea"
             placeholder="Tell the admin why you need access"
             value={reason}
             onChange={(e) => setReason?.(e.target.value)}
@@ -103,6 +106,7 @@ export default function LoginComponents({
       )} */}
 
       <button
+        key="submit-button"
         type="submit"
         disabled={Boolean(loading)}
         className="w-full py-3 text-white font-semibold rounded-lg
@@ -116,6 +120,7 @@ export default function LoginComponents({
       </button>
 
       <button
+        key="mode-toggle-button"
         type="button"
         onClick={() => onModeChange?.(isRequestMode ? "login" : "request")}
         className="w-full py-3 font-semibold rounded-lg border border-blue-500 text-blue-300 md:text-blue-600 hover:bg-blue-500/10 transition-all"

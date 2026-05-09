@@ -63,10 +63,6 @@ export default function WelcomeIcon() {
           </div>
         </div>
 
-        <p className="mt-4 text-center text-white/80 text-2xl font-bold tracking-wide uppercase animate__animated animate__fadeInUp">
-          DEV TEST
-        </p>
-
         {/* Tagline */}
         <p className="mt-8 text-center text-white/80 text-xl font-medium tracking-wide max-w-md leading-relaxed animate__animated animate__fadeInUp animate__delay-1s">
           Track your assets. Manage your workflow. Optimize results.

@@ -1,13 +1,17 @@
-/* eslint-disable react-hooks/rules-of-hooks */
 "use client";
 
-import React, { useState, useEffect } from "react";
+// Force dynamic rendering to avoid pre-rendering issues with useSearchParams
+export const dynamic = "force-dynamic";
+
+import React, { useState, useEffect, Suspense } from "react";
+import AuthGuard from "../../components/AuthGuard";
 import TopNavbar from "../../components/TopNavbar";
 import Sidebar from "../../components/Sidebar";
 import { logActivity } from "../../utils/logActivity";
 import { useSearchParams } from "next/navigation";
 import {
   PackageCheck,
+  PackageOpen,
   Plus,
   Clock,
   Calendar,
@@ -21,7 +25,6 @@ import {
   handleAddParcelIn,
   updateParcelInItemHelper,
 } from "../../utils/parcelShippedHelper";
-import AuthGuard from "../../components/AuthGuard";
 import { useAuth } from "../../hook/useAuth";
 import { isAdminRole } from "../../utils/roleHelper";
 import useBulkStockInForm from "../../hook/useBulkStockInForm";
@@ -30,7 +33,7 @@ import { products } from "../../utils/productsData";
 import { CATEGORIES, CATEGORY_OPTIONS, getCategoryColor, getCategoryIcon } from "../../utils/categoryUtils";
 import { buildProductCode } from "../../utils/inventoryMeta";
 
-export default function Page() {
+function PageContent() {
   const searchParams = useSearchParams();
   const itemParam = searchParams.get("item");
 
@@ -38,21 +41,65 @@ export default function Page() {
   const [darkMode, setDarkMode] = useState(false);
 
   const [items, setItems] = useState([]);
+  
+  // Single input form state
   const [name, setName] = useState("");
-  const [date, setDate] = useState("");
   const [quantity, setQuantity] = useState(1);
-  const [timeHour, setTimeHour] = useState("1");
-  const [timeMinute, setTimeMinute] = useState("00");
-  const [timeAMPM, setTimeAMPM] = useState("AM");
+  const [itemCode, setItemCode] = useState("");
+  
+  // Multiple products state for parcels
+  const [parcelRows, setParcelRows] = useState([
+    {
+      id: 1,
+      name: itemParam || "",
+      quantity: 1,
+      price: "",
+      category: CATEGORIES.ELECTRONICS,
+      shippingMode: "",
+      clientName: "",
+      itemCode: "",
+    }
+  ]);
+  
+  // Common date and time for all parcels
+  const getCurrentDate = () => {
+    const now = new Date();
+    return now.toISOString().slice(0, 10);
+  };
+  
+  const getCurrentTime = () => {
+    const now = new Date();
+    let hour = now.getHours();
+    const minute = now.getMinutes();
+    const ampm = hour >= 12 ? "PM" : "AM";
+    hour = hour % 12;
+    hour = hour ? hour : 12;
+    return {
+      hour: String(hour),
+      minute: minute < 10 ? `0${minute}` : String(minute),
+      ampm
+    };
+  };
+  
+  const currentTime = getCurrentTime();
+  const [date, setDate] = useState(getCurrentDate());
+  const [timeHour, setTimeHour] = useState(currentTime.hour);
+  const [timeMinute, setTimeMinute] = useState(currentTime.minute);
+  const [timeAMPM, setTimeAMPM] = useState(currentTime.ampm);
   const [shippingMode, setShippingMode] = useState("");
   const [clientName, setClientName] = useState("");
   const [price, setPrice] = useState("");
   const [category, setCategory] = useState(CATEGORIES.OTHERS);
   const [itemSuggestions, setItemSuggestions] = useState([]);
-  const computedTotalPrice = (Number(price) || 0) * (Number(quantity) || 0);
+  // Calculate total price from all parcel rows
+  const computedTotalPrice = parcelRows.reduce((total, row) => {
+    return total + (Number(row.price) || 0) * (Number(row.quantity) || 0);
+  }, 0);
   const [isUpdatingCategoryId, setIsUpdatingCategoryId] = useState(null);
   const [showStockInHistory, setShowStockInHistory] = useState(false);
   const [showMultipleInput, setShowMultipleInput] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(5);
   const { role, displayName, userEmail } = useAuth();
   const isAdmin = isAdminRole(role);
 
@@ -79,9 +126,6 @@ export default function Page() {
 
   const uniqueItemCount = getUniqueItemCount(items);
 
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(5);
-
   const handleTransferCategory = async (itemId, nextCategory) => {
     setIsUpdatingCategoryId(itemId);
     const updated = await updateParcelInItemHelper(itemId, {
@@ -107,42 +151,69 @@ export default function Page() {
     }
   }, [itemParam]);
 
+  // Sync name, quantity, and itemCode with first parcel row when in single input mode
+  useEffect(() => {
+    if (!showMultipleInput && parcelRows.length > 0) {
+      setParcelRows(rows => rows.map((row, idx) => 
+        idx === 0 ? { ...row, name, quantity, itemCode } : row
+      ));
+    }
+  }, [name, quantity, itemCode, showMultipleInput]);
+
+  const updateParcelRow = (id, field, value) => {
+    setParcelRows(parcelRows.map(row => {
+      if (row.id === id) {
+        const updatedRow = { ...row, [field]: value };
+        
+        // Reset quantity to 1 when item changes
+        if (field === 'name') {
+          updatedRow.quantity = 1;
+        }
+        
+        return updatedRow;
+      }
+      return row;
+    }));
+  };
+
+  const calculateTotalPrice = () => {
+    return parcelRows.reduce((total, row) => {
+      const quantityToAdd = parseInt(row.quantity) || 0;
+      const computedTotalPrice = (parseFloat(row.price) || 0) * quantityToAdd;
+      return total + computedTotalPrice;
+    }, 0);
+  };
+
+  // Helper function for conditional styling
+  const getClassName = (darkMode, darkClass, lightClass) => {
+    return darkMode ? darkClass : lightClass;
+  };
+
+  const loadItems = async () => {
+    const inItems = await fetchParcelItems();
+    setItems(inItems);
+  };
+
   useEffect(() => {
     const savedDarkMode = localStorage.getItem("darkMode");
     if (savedDarkMode !== null) setDarkMode(savedDarkMode === "true");
 
-    const now = new Date();
-    let hour = now.getHours();
-    const minute = now.getMinutes();
-    const ampm = hour >= 12 ? "PM" : "AM";
-    hour = hour % 12;
-    hour = hour ? hour : 12;
-    const formattedMinute = minute < 10 ? `0${minute}` : `${minute}`;
+    // Only set current time if not coming from URL params (no itemParam)
+    if (!itemParam) {
+      const now = new Date();
+      let hour = now.getHours();
+      const minute = now.getMinutes();
+      const ampm = hour >= 12 ? "PM" : "AM";
+      hour = hour % 12;
+      hour = hour ? hour : 12;
+      const formattedMinute = minute < 10 ? `0${minute}` : `${minute}`;
 
-    setTimeHour(hour.toString());
-    setTimeMinute(formattedMinute);
-    setTimeAMPM(ampm);
+      setTimeHour(hour.toString());
+      setTimeMinute(formattedMinute);
+      setTimeAMPM(ampm);
+    }
     loadItems();
-  }, []);
-
-  const loadItems = async () => {
-    const data = await fetchParcelItems();
-    const sortedData = data
-      .map((item) => ({ ...item, quantity: Number(item.quantity || 0) }))
-      .filter((item) => item.quantity > 0)
-      .sort((a, b) => b.quantity - a.quantity);
-    setItems(sortedData);
-
-    const existingNames = sortedData.map((item) => item.name).filter(Boolean);
-    const componentNames = products
-      .flatMap((product) => product.components || [])
-      .map((component) => component.name)
-      .flatMap((name) => (name || "").split(/\s+or\s+/i))
-      .map((value) => value.trim())
-      .filter(Boolean);
-    const unique = Array.from(new Set([...existingNames, ...componentNames])).sort();
-    setItemSuggestions(unique);
-  };
+  }, [itemParam]);
 
   const formatTo12Hour = (time) => {
     if (!time) return "";
@@ -157,52 +228,158 @@ export default function Page() {
 
   const handleAddItem = async (e) => {
     e.preventDefault();
+    
+    // For single input mode, use the direct state values to avoid race condition with useEffect sync
+    const isSingleInput = !showMultipleInput;
+    const parcelsToProcess = isSingleInput 
+      ? [{ 
+          id: 1, 
+          name, 
+          quantity, 
+          price: parcelRows[0]?.price || "", 
+          itemCode,
+          category,
+          shippingMode: parcelRows[0]?.shippingMode || "",
+          clientName: parcelRows[0]?.clientName || ""
+        }]
+      : parcelRows.filter(row => row.name && row.quantity && date);
+    
+    // Validate that at least one parcel is selected and all required fields are filled
+    const validParcels = parcelsToProcess.filter(row => row.name && row.quantity && date);
+    if (validParcels.length === 0) {
+      alert("Please select at least one item and fill all required fields");
+      return;
+    }
+
+    // Check for duplicate item codes with different names in single input mode
+    if (isSingleInput && itemCode) {
+      const existingItems = items.filter(item => item.item_name && item.item_name !== name);
+      const duplicateCode = existingItems.find(existingItem => 
+        existingItem.item_code && existingItem.item_code === itemCode
+      );
+      
+      if (duplicateCode) {
+        alert(`Item code "${itemCode}" is already assigned to item "${duplicateCode.item_name}". Please use a different item code.`);
+        return;
+      }
+    }
+
+    // Check for duplicate item codes with different names in multiple input mode
+    if (!isSingleInput) {
+      const codesWithNames = parcelsToProcess.filter(row => row.itemCode && row.name);
+      const duplicateCodes = codesWithNames.filter((row, index, self) => {
+        return codesWithNames.findIndex(other => 
+          other.itemCode === row.itemCode && other.name !== row.name
+        ) !== index;
+      });
+      
+      if (duplicateCodes.length > 0) {
+        const duplicate = duplicateCodes[0];
+        alert(`Item code "${duplicate.itemCode}" is already assigned to item "${duplicate.name}". Please use a different item code.`);
+        return;
+      }
+    }
+
+    // Additional validation: Check if item name already exists with different code
+    if (isSingleInput && name) {
+      const existingWithDifferentCode = items.find(item => 
+        item.item_name === name && item.item_code !== itemCode
+      );
+      
+      if (existingWithDifferentCode) {
+        alert(`Item "${name}" already exists with item code "${existingWithDifferentCode.item_code}". Please use that item code or update the existing item.`);
+        return;
+      }
+    }
+
+    // Additional validation for multiple input mode
+    if (!isSingleInput) {
+      const duplicates = parcelsToProcess.filter((row, index, self) => {
+        return parcelsToProcess.findIndex(other => 
+          (other.itemCode === row.itemCode && other.name !== row.name) ||
+          (other.name === row.name && other.item_code !== row.itemCode)
+        ) !== index;
+      });
+      
+      if (duplicates.length > 0) {
+        const duplicate = duplicates[0];
+        const conflictType = duplicate.itemCode === parcelsToProcess.find(r => r.itemCode === duplicate.itemCode)?.itemCode ? "code" : "name";
+        const conflictingItem = parcelsToProcess.find(r => 
+          (conflictType === "code" && r.itemCode === duplicate.itemCode) ||
+          (conflictType === "name" && r.name === duplicate.name)
+        );
+        
+        alert(`Duplicate detected: ${conflictType === "code" ? 
+          `Item code "${duplicate.itemCode}" is already assigned to item "${conflictingItem.name}"` : 
+          `Item "${duplicate.name}" already exists with item code "${conflictingItem.item_code}"`
+        }. Please use a different item code or update the existing item.`);
+        return;
+      }
+    }
+
     const confirmed = window.confirm(
-      "Confirm Stock In: Are you sure you want to add this item to stock in?",
+      `Confirm Stock In: Are you sure you want to add ${validParcels.length} item(s) to stock in?`,
     );
     if (!confirmed) return;
 
-    const result = await handleAddParcelIn({
-      name,
-      date,
-      quantity,
-      timeHour,
-      timeMinute,
-      timeAMPM,
-      shipping_mode: shippingMode,
-      client_name: clientName,
-      price: computedTotalPrice,
-      category: category,
-    });
-    if (!result || !result.newItem) return;
-
-    await logActivity({
-      userId: userEmail || null,
-     userName: displayName || userEmail || "Unknown User",
-      userType: role || "staff",
-      action: "Stock IN",
-      module: "Inventory",
-      details: `Added ${quantity}x ${name}`,
-    });
+    // Process each valid parcel row
+    let successCount = 0;
+    for (const row of validParcels) {
+      const rowTotalPrice = (Number(row.price) || 0) * (Number(row.quantity) || 0);
+      const result = await handleAddParcelIn({
+        name: row.name,
+        date,
+        quantity: row.quantity,
+        timeHour,
+        timeMinute,
+        timeAMPM,
+        shipping_mode: shippingMode || row.shippingMode,
+        client_name: clientName || row.clientName,
+        price: rowTotalPrice,
+        category: row.category || category,
+        item_code: row.itemCode || itemCode || null,
+      });
+      if (result && result.newItem) {
+        successCount++;
+        await logActivity({
+          userId: userEmail || null,
+          userName: displayName || userEmail || "Unknown User",
+          userType: role || "staff",
+          action: "Stock IN",
+          module: "Inventory",
+          details: `Added ${row.quantity}x ${row.name}`,
+        });
+      }
+    }
     
-    setItems(
-      result.items
-        .map((item) => ({ ...item, quantity: Number(item.quantity || 0) }))
-        .filter((item) => item.quantity > 0)
-        .sort((a, b) => b.quantity - a.quantity),
-    );
+    // Reload items to show updated list
+    await loadItems();
 
+    // Reset form
     setName("");
-    setDate("");
     setQuantity(1);
-    setTimeHour("1");
-    setTimeMinute("00");
-    setTimeAMPM("AM");
+    setItemCode("");
+    setParcelRows([{
+      id: 1,
+      name: "",
+      quantity: 1,
+      price: "",
+      category: CATEGORIES.ELECTRONICS,
+      shippingMode: "",
+      clientName: "",
+      itemCode: "",
+    }]);
+    const resetTime = getCurrentTime();
+    const resetDate = getCurrentDate();
+    setDate(resetDate);
+    setTimeHour(resetTime.hour);
+    setTimeMinute(resetTime.minute);
+    setTimeAMPM(resetTime.ampm);
     setShippingMode("");
     setClientName("");
     setPrice("");
-    setCategory(CATEGORIES.OTHERS);
-    alert("Stock In recorded successfully.");
+    
+    alert(`${successCount} Stock In record(s) added successfully.`);
   };
 
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -218,71 +395,36 @@ export default function Page() {
     if (currentPage > 1) setCurrentPage(currentPage - 1);
   };
 
-  const getPageNumbers = () => {
-    const pageNumbers = [];
-    const maxPagesToShow = 5;
-
-    if (totalPages <= maxPagesToShow) {
-      for (let i = 1; i <= totalPages; i++) pageNumbers.push(i);
-    } else {
-      if (currentPage <= 3) {
-        for (let i = 1; i <= 4; i++) pageNumbers.push(i);
-        pageNumbers.push("...");
-        pageNumbers.push(totalPages);
-      } else if (currentPage >= totalPages - 2) {
-        pageNumbers.push(1);
-        pageNumbers.push("...");
-        for (let i = totalPages - 3; i <= totalPages; i++) pageNumbers.push(i);
-      } else {
-        pageNumbers.push(1);
-        pageNumbers.push("...");
-        for (let i = currentPage - 1; i <= currentPage + 1; i++)
-          pageNumbers.push(i);
-        pageNumbers.push("...");
-        pageNumbers.push(totalPages);
-      }
-    }
-
-    return pageNumbers;
-  };
-
   return (
     <AuthGuard darkMode={darkMode}>
       <div
-        className={`flex flex-col w-full h-screen overflow-hidden ${
-          darkMode ? "dark bg-[#0B0B0B] text-white" : "bg-[#F9FAFB] text-black"
+        className={`min-h-screen transition-colors duration-300 ${
+          darkMode ? "bg-[#111827] text-white" : "bg-[#F3F4F6] text-black"
         }`}
       >
-        {/* Navbar */}
-        <div
-          className={`fixed top-0 left-0 right-0 z-50 backdrop-blur-xl border-b shadow-sm animate__animated animate__fadeInDown animate__faster ${
-            darkMode
-              ? "bg-[#111827]/90 border-[#374151]"
-              : "bg-white/90 border-[#E5E7EB]"
-          }`}
-        >
-          <TopNavbar
-            sidebarOpen={sidebarOpen}
-            setSidebarOpen={setSidebarOpen}
-            darkMode={darkMode}
-            setDarkMode={setDarkMode}
-          />
-        </div>
+        {/* Top Navbar */}
+        <TopNavbar
+          sidebarOpen={sidebarOpen}
+          setSidebarOpen={setSidebarOpen}
+          darkMode={darkMode}
+          setDarkMode={setDarkMode}
+        />
 
         {/* Sidebar */}
         <Sidebar
           sidebarOpen={sidebarOpen}
           setSidebarOpen={setSidebarOpen}
+          activeTab="stock-in"
           darkMode={darkMode}
         />
 
-        {/* Main */}
+        {/* Main Content */}
         <main
-          className={`flex-1 overflow-y-auto pt-20 transition-all duration-300 ${
-            sidebarOpen ? "lg:ml-64" : ""
+          className={`flex-1 overflow-y-auto pt-20 transition-all duration-300 ease-in-out ${
+            sidebarOpen ? "lg:ml-64" : "lg:ml-0"
           } ${darkMode ? "bg-[#0B0B0B]" : "bg-[#F9FAFB]"}`}
         >
-          <div className="max-w-[1200px] mx-auto px-6 py-8">
+          <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
             {/* Header */}
             <div className="mb-10 animate__animated animate__fadeInDown animate__faster">
               <div className="flex items-center justify-center gap-4 mb-2">
@@ -292,12 +434,14 @@ export default function Page() {
                   }`}
                 ></div>
                 <div className="flex items-center gap-2 px-3">
-                  <PackageCheck
+                  <PackageOpen
                     className={`w-6 h-6 ${
-                      darkMode ? "text-[#3B82F6]" : "text-[#1E3A8A]"
+                      darkMode ? "text-[#F97316]" : "text-[#EA580C]"
                     }`}
                   />
-                  <h1 className="text-3xl font-bold tracking-wide">Stock In</h1>
+                  <h1 className="text-3xl font-bold tracking-wide">
+                    Stock In
+                  </h1>
                 </div>
                 <div
                   className={`flex-1 h-[2px] ${
@@ -305,186 +449,203 @@ export default function Page() {
                   }`}
                 ></div>
               </div>
-              <p
-                className={`text-center text-sm ${
-                  darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"
-                }`}
-              >
-                Record new items delivered to your inventory
-              </p>
+              <div className="text-center">
+                <p
+                  className={`text-sm ${
+                    darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"
+                  }`}
+                >
+                  Record items coming into your inventory
+                </p>
+              </div>
             </div>
 
             {/* Form */}
             {!showMultipleInput && (
             <form
               onSubmit={handleAddItem}
-              className={`p-6 rounded-xl shadow-lg mb-8 border transition animate__animated animate__fadeInUp animate__faster ${
-                darkMode
-                  ? "bg-[#1F2937] border-[#374151] text-white"
-                  : "bg-white border-[#E5E7EB] text-[#111827]"
-              }`}
+              className={getClassName(
+                darkMode,
+                "p-6 rounded-xl shadow-lg mb-8 border transition animate__animated animate__fadeInUp animate__faster bg-[#1F2937] border-[#374151] text-white",
+                "p-6 rounded-xl shadow-lg mb-8 border transition animate__animated animate__fadeInUp animate__faster bg-white border-[#E5E7EB] text-[#111827]"
+              )}
             >
               <div className="flex items-center gap-2 mb-6">
-                <Plus
-                  className={`w-5 h-5 ${
-                    darkMode ? "text-[#3B82F6]" : "text-[#1E3A8A]"
-                  }`}
-                />
-                <h2 className="text-lg font-semibold">Add New Item</h2>
+                <div className="flex items-center gap-2">
+                  <Plus
+                    className={getClassName(
+                      darkMode,
+                      "w-5 h-5 text-[#3B82F6]",
+                      "w-5 h-5 text-[#1E3A8A]"
+                    )}
+                  />
+                  <h2 className="text-lg font-semibold">Add New Item</h2>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-4">
+              {/* Row 1: Item Name, Item Code, Date, Quantity, Time In */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
                 {/* Item Name */}
-                <div>
-                  <label
-                    className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
-                    <Package className="w-4 h-4" /> Item Name
+                <div className="flex flex-col">
+                  <label className={getClassName(
+                    darkMode,
+                    "text-xs font-medium mb-1.5 text-gray-300 flex items-center gap-1",
+                    "text-xs font-medium mb-1.5 text-gray-700 flex items-center gap-1"
+                  )}>
+                    <Package className="w-3.5 h-3.5" /> Item Name
                   </label>
                   <input
                     type="text"
-                    placeholder="Item name"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    list="stock-in-suggestions"
-                    className={`border rounded-lg px-4 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white placeholder-[#6B7280]"
-                        : "border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black placeholder-[#9CA3AF]"
-                    }`}
+                    placeholder="Item name"
+                    className={getClassName(
+                      darkMode,
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                    )}
                     required
                   />
-                  <datalist id="stock-in-suggestions">
-                    {itemSuggestions.map((suggestion) => (
-                      <option key={suggestion} value={suggestion} />
-                    ))}
-                  </datalist>
+                </div>
+
+                {/* Item Code */}
+                <div className="flex flex-col">
+                  <label className={getClassName(
+                    darkMode,
+                    "text-xs font-medium mb-1.5 text-gray-300 flex items-center gap-1",
+                    "text-xs font-medium mb-1.5 text-gray-700 flex items-center gap-1"
+                  )}>
+                    <Package className="w-3.5 h-3.5" /> Item Code
+                  </label>
+                  <input
+                    type="text"
+                    value={itemCode}
+                    onChange={(e) => setItemCode(e.target.value)}
+                    placeholder="Enter code"
+                    className={getClassName(
+                      darkMode,
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                    )}
+                  />
                 </div>
 
                 {/* Date */}
-                <div>
-                  <label
-                    className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
-                    <Calendar className="w-4 h-4" /> Date
+                <div className="flex flex-col">
+                  <label className={getClassName(
+                    darkMode,
+                    "text-xs font-medium mb-1.5 text-gray-300 flex items-center gap-1",
+                    "text-xs font-medium mb-1.5 text-gray-700 flex items-center gap-1"
+                  )}>
+                    <Calendar className="w-3.5 h-3.5" /> Date
                   </label>
                   <input
                     type="date"
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
-                    className={`border rounded-lg px-4 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white"
-                        : "border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
-                    }`}
+                    className={getClassName(
+                      darkMode,
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                    )}
                     required
                   />
                 </div>
 
                 {/* Quantity */}
-                <div>
-                  <label
-                    className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
-                    <Package className="w-4 h-4" /> Quantity
+                <div className="flex flex-col">
+                  <label className={getClassName(
+                    darkMode,
+                    "text-xs font-medium mb-1.5 text-gray-300 flex items-center gap-1",
+                    "text-xs font-medium mb-1.5 text-gray-700 flex items-center gap-1"
+                  )}>
+                    <PackageCheck className="w-3.5 h-3.5" /> Quantity
                   </label>
                   <input
                     type="number"
                     min="1"
                     value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
-                    className={`border rounded-lg px-4 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white"
-                        : "border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
-                    }`}
+                    onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+                    className={getClassName(
+                      darkMode,
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                    )}
                     required
                   />
                 </div>
 
                 {/* Time In */}
-                <div>
-                  <label
-                    className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
-                    <Clock className="w-4 h-4" /> Time In
+                <div className="flex flex-col">
+                  <label className={getClassName(
+                    darkMode,
+                    "text-xs font-medium mb-1.5 text-gray-300 flex items-center gap-1",
+                    "text-xs font-medium mb-1.5 text-gray-700 flex items-center gap-1"
+                  )}>
+                    <Clock className="w-3.5 h-3.5" /> Time In
                   </label>
                   <div className="flex gap-2">
                     <select
                       value={timeHour}
                       onChange={(e) => setTimeHour(e.target.value)}
-                      className={`border rounded-lg px-3 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
+                      className={`border rounded-lg px-2 py-2 flex-1 min-w-[50px] focus:outline-none focus:ring-2 transition-all ${
                         darkMode
-                          ? "border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white"
-                          : "border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                          ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
+                          : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
                       }`}
                     >
-                      {Array.from({ length: 12 }, (_, i) => (
-                        <option key={i} value={i + 1}>
-                          {i + 1}
-                        </option>
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
+                        <option key={h} value={h}>{h}</option>
                       ))}
                     </select>
                     <select
                       value={timeMinute}
                       onChange={(e) => setTimeMinute(e.target.value)}
-                      className={`border rounded-lg px-3 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
+                      className={`border rounded-lg px-2 py-2 flex-1 min-w-[50px] focus:outline-none focus:ring-2 transition-all ${
                         darkMode
-                          ? "border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white"
-                          : "border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                          ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
+                          : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
                       }`}
                     >
-                      {Array.from({ length: 60 }, (_, i) => {
-                        const val = i < 10 ? `0${i}` : `${i}`;
-                        return (
-                          <option key={i} value={val}>
-                            {val}
-                          </option>
-                        );
-                      })}
+                      {Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, "0")).map((m) => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
                     </select>
                     <select
                       value={timeAMPM}
                       onChange={(e) => setTimeAMPM(e.target.value)}
-                      className={`border rounded-lg px-3 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
+                      className={`border rounded-lg px-2 py-2 w-[60px] min-w-[60px] shrink-0 focus:outline-none focus:ring-2 transition-all ${
                         darkMode
-                          ? "border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white"
-                          : "border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                          ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
+                          : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
                       }`}
                     >
-                      <option>AM</option>
-                      <option>PM</option>
+                      <option value="AM">AM</option>
+                      <option value="PM">PM</option>
                     </select>
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-4">
+              {/* Row 2: Category, Shipping Mode, Client Name, Price */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                 {/* Category */}
-                <div>
-                  <label
-                    className={`text-sm font-medium mb-2 flex items-center gap-1.5 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
-                    <Package className="w-4 h-4" /> Category
+                <div className="flex flex-col">
+                  <label className={getClassName(
+                    darkMode,
+                    "text-xs font-medium mb-1.5 text-gray-300 flex items-center gap-1",
+                    "text-xs font-medium mb-1.5 text-gray-700 flex items-center gap-1"
+                  )}>
+                    <Package className="w-3.5 h-3.5" /> Category
                   </label>
                   <select
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
-                    className={`border rounded-lg px-4 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white"
-                        : "border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
-                    }`}
+                    className={getClassName(
+                      darkMode,
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                    )}
                     required
                   >
                     {CATEGORY_OPTIONS.map((option) => (
@@ -494,12 +655,14 @@ export default function Page() {
                     ))}
                   </select>
                 </div>
-                <div>
-                  <label
-                    className={`text-sm font-medium mb-2 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
+
+                {/* Shipping Mode */}
+                <div className="flex flex-col">
+                  <label className={getClassName(
+                    darkMode,
+                    "text-xs font-medium mb-1.5 text-gray-300",
+                    "text-xs font-medium mb-1.5 text-gray-700"
+                  )}>
                     Shipping Mode
                   </label>
                   <input
@@ -507,26 +670,28 @@ export default function Page() {
                     value={shippingMode}
                     onChange={(e) => setShippingMode(e.target.value)}
                     placeholder="Shopee (J&T)"
-                    className={`border rounded-lg px-4 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white"
-                        : "border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
-                    }`}
+                    className={getClassName(
+                      darkMode,
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                    )}
                   />
-                  <p
-                    className={`text-xs mt-1 ${
-                      darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"
-                    }`}
-                  >
+                  <p className={getClassName(
+                    darkMode,
+                    "text-[10px] mt-1 text-gray-400",
+                    "text-[10px] mt-1 text-gray-500"
+                  )}>
                     Display Price: ₱{computedTotalPrice.toLocaleString()}
                   </p>
                 </div>
-                <div>
-                  <label
-                    className={`text-sm font-medium mb-2 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
+
+                {/* Client Name */}
+                <div className="flex flex-col">
+                  <label className={getClassName(
+                    darkMode,
+                    "text-xs font-medium mb-1.5 text-gray-300",
+                    "text-xs font-medium mb-1.5 text-gray-700"
+                  )}>
                     Client Name
                   </label>
                   <input
@@ -534,19 +699,20 @@ export default function Page() {
                     value={clientName}
                     onChange={(e) => setClientName(e.target.value)}
                     placeholder="Client name"
-                    className={`border rounded-lg px-4 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white"
-                        : "border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
-                    }`}
+                    className={getClassName(
+                      darkMode,
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                    )}
                   />
                 </div>
-                <div>
-                  <label
-                    className={`text-sm font-medium mb-2 ${
-                      darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
-                    }`}
-                  >
+                {/* Price */}
+                <div className="flex flex-col">
+                  <label className={getClassName(
+                    darkMode,
+                    "text-xs font-medium mb-1.5 text-gray-300",
+                    "text-xs font-medium mb-1.5 text-gray-700"
+                  )}>
                     Price
                   </label>
                   <input
@@ -556,28 +722,29 @@ export default function Page() {
                     value={price}
                     onChange={(e) => setPrice(e.target.value)}
                     placeholder="0.00"
-                    className={`border rounded-lg px-4 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
-                      darkMode
-                        ? "border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white"
-                        : "border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
-                    }`}
+                    className={getClassName(
+                      darkMode,
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white",
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#1E3A8A] focus:border-[#1E3A8A] bg-white text-black"
+                    )}
                   />
                 </div>
               </div>
 
-              <div className="flex justify-end items-center gap-3 mt-6">
+              {/* Buttons */}
+              <div className="flex justify-end items-center gap-3 mt-4">
                 <button
                   type="button"
                   onClick={() => setShowMultipleInput(true)}
-                  className="bg-[#22C55E] hover:bg-[#16A34A] text-white px-5 py-2.5 rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg"
+                  className="bg-[#22C55E] hover:bg-[#16A34A] text-white px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg"
                 >
-                  <Plus className="w-5 h-5" /> Multiple Items
+                  <Plus className="w-4 h-4" /> Multiple Items
                 </button>
                 <button
                   type="submit"
-                  className="bg-[#1E3A8A] hover:bg-[#1D4ED8] text-white px-6 py-2.5 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg"
+                  className="bg-[#1E3A8A] hover:bg-[#1D4ED8] text-white px-5 py-2 rounded-lg font-medium text-sm transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg"
                 >
-                  <Plus className="w-5 h-5" /> Add Item
+                  <Plus className="w-4 h-4" /> Add Item
                 </button>
               </div>
             </form>
@@ -694,19 +861,19 @@ export default function Page() {
 
             {/* Table */}
             <div
-              className={`rounded-xl shadow-xl overflow-hidden border transition animate__animated animate__fadeInUp animate__fast ${
+              className={`rounded-xl shadow-lg overflow-hidden border animate__animated animate__fadeInDown ${
                 darkMode
                   ? "bg-[#1F2937] border-[#374151]"
                   : "bg-white border-[#E5E7EB]"
               }`}
             >
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[600px] table-fixed">
+              <div className="overflow-y-auto overflow-x-auto max-h-[600px]">
+                <table className="w-full min-w-[1050px] table-fixed">
                   <thead
-                    className={`${
+                    className={`sticky top-0 z-10 ${
                       darkMode
-                        ? "bg-[#111827] text-[#D1D5DB]"
-                        : "bg-[#F9FAFB] text-[#374151]"
+                        ? "bg-[#111827] border-b border-[#374151]"
+                        : "bg-[#F9FAFB] border-b border-[#E5E7EB]"
                     }`}
                   >
                       <tr>
@@ -724,7 +891,9 @@ export default function Page() {
                         (head) => (
                           <th
                             key={head}
-                            className="p-3 sm:p-4 text-center text-xs sm:text-sm font-semibold whitespace-nowrap"
+                            className={`px-4 sm:px-6 py-3 sm:py-4 text-center text-xs sm:text-sm font-semibold uppercase tracking-wider whitespace-nowrap ${
+                              darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
+                            }`}
                           >
                             {head}
                           </th>
@@ -733,9 +902,9 @@ export default function Page() {
                     </tr>
                   </thead>
                   <tbody
-                    className={
+                    className={`divide-y ${
                       darkMode ? "divide-[#374151]" : "divide-[#E5E7EB]"
-                    }
+                    }`}
                   >
                       {currentItems.length === 0 ? (
                         <tr>
@@ -762,15 +931,15 @@ export default function Page() {
                       currentItems.map((item, index) => (
                         <tr
                           key={item.id}
-                          className={`border-t transition animate__animated animate__fadeIn animate__faster ${
+                          className={`transition-all duration-200 animate__animated animate__fadeInUp ${
                             darkMode
-                              ? "border-[#374151] hover:bg-[#374151]/40"
-                              : "border-[#E5E7EB] hover:bg-[#F3F4F6]"
+                              ? "hover:bg-[#374151]/40"
+                              : "hover:bg-[#F3F4F6]"
                           }`}
-                          style={{ animationDelay: `${index * 0.03}s` }}
+                          style={{ animationDelay: `${index * 0.1}s` }}
                         >
                           <td className="p-3 sm:p-4 text-center align-middle text-xs sm:text-sm whitespace-nowrap">
-                            {buildProductCode(item, "CMP")}
+                            {item.item_code || buildProductCode(item, "CMP")}
                           </td>
                           <td className="p-3 sm:p-4 font-semibold text-sm sm:text-base whitespace-nowrap text-center align-middle">
                             {item.name}
@@ -806,33 +975,53 @@ export default function Page() {
                               </select>
                             </div>
                           </td>
-                          <td className="p-3 sm:p-4 text-sm sm:text-base whitespace-nowrap text-center align-middle">
+                          <td
+                            className={`px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-center align-middle text-sm sm:text-base ${
+                              darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
+                            }`}
+                          >
                             {item.date}
                           </td>
-                          <td className="p-3 sm:p-4 text-center align-middle">
+                          <td className="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-center align-middle">
                             <span
-                              className={`px-2 sm:px-3 py-1 rounded-lg font-bold text-xs sm:text-sm ${
+                              className={`inline-flex items-center gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs sm:text-sm font-semibold ${
                                 darkMode
-                                  ? "bg-[#22C55E]/20 text-[#22C55E] border border-[#22C55E]/30"
-                                  : "bg-[#DCFCE7] text-[#16A34A] border border-[#BBF7D0]"
+                                  ? "bg-[#F97316]/20 text-[#F97316] border border-[#F97316]/30"
+                                  : "bg-[#FFEDD5] text-[#EA580C] border border-[#FED7AA]"
                               }`}
                             >
-                              {item.quantity}
+                              {item.quantity} units
                             </span>
                           </td>
-                          <td className="p-3 sm:p-4 text-sm sm:text-base whitespace-nowrap text-center align-middle">
+                          <td
+                            className={`px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-center align-middle text-sm sm:text-base ${
+                              darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
+                            }`}
+                          >
                             <div className="flex items-center justify-center gap-2">
-                              <Clock size={14} />
+                              <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 opacity-50" />
                               {formatTo12Hour(item.timeIn)}
                             </div>
                           </td>
-                          <td className="p-3 sm:p-4 text-sm sm:text-base whitespace-nowrap text-center align-middle">
+                          <td
+                            className={`px-4 sm:px-6 py-3 sm:py-4 text-center align-middle text-sm sm:text-base ${
+                              darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
+                            }`}
+                          >
                             {item.shipping_mode || "-"}
                           </td>
-                          <td className="p-3 sm:p-4 text-sm sm:text-base whitespace-nowrap text-center align-middle">
+                          <td
+                            className={`px-4 sm:px-6 py-3 sm:py-4 text-center align-middle text-sm sm:text-base ${
+                              darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
+                            }`}
+                          >
                             {item.client_name || "-"}
                           </td>
-                          <td className="p-3 sm:p-4 text-sm sm:text-base whitespace-nowrap text-center align-middle">
+                          <td
+                            className={`px-4 sm:px-6 py-3 sm:py-4 text-center align-middle text-sm sm:text-base ${
+                              darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
+                            }`}
+                          >
                             {item.price !== null && item.price !== undefined
                               ? `₱${Number(item.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                               : "-"}
@@ -843,69 +1032,27 @@ export default function Page() {
                   </tbody>
                 </table>
               </div>
+            </div>
 
-              {/* Pagination */}
-              {items.length > 5 && (
-                <div
-                  className={`flex items-center justify-between px-4 py-3 border-t ${
-                    darkMode ? "border-[#374151]" : "border-[#E5E7EB]"
-                  }`}
-                >
-                  <span
-                    className={`text-sm ${
-                      darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"
-                    }`}
-                  >
-                    Showing {indexOfFirstItem + 1} to{" "}
-                    {Math.min(indexOfLastItem, items.length)} of {items.length}{" "}
-                    entries
-                  </span>
+            {/* Pagination */}
+            <div className="flex justify-center items-center gap-2 mt-6">
+              <button
+                onClick={goToPrevPage}
+                disabled={currentPage === 1}
+                className={`p-2 rounded-lg border transition-colors ${
+                  darkMode
+                    ? "border-[#374151] bg-[#1F2937] text-white hover:bg-[#374151] disabled:opacity-50 disabled:cursor-not-allowed"
+                    : "border-[#D1D5DB] bg-white text-[#374151] hover:bg-[#F3F4F6] disabled:opacity-50 disabled:cursor-not-allowed"
+                }`}
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
 
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={goToPrevPage}
-                      disabled={currentPage === 1}
-                      className={`p-2 rounded-lg transition-all ${
-                        currentPage === 1
-                          ? darkMode
-                            ? "bg-[#374151] text-[#6B7280] cursor-not-allowed"
-                            : "bg-[#F3F4F6] text-[#9CA3AF] cursor-not-allowed"
-                          : darkMode
-                            ? "bg-[#374151] text-[#D1D5DB] hover:bg-[#4B5563]"
-                            : "bg-[#F3F4F6] text-[#374151] hover:bg-[#E5E7EB]"
-                      }`}
-                    >
-                      <ChevronLeft className="w-5 h-5" />
-                    </button>
-
-                    <div className="flex items-center gap-1">
-                      {getPageNumbers().map((pageNum, idx) =>
-                        pageNum === "..." ? (
-                          <span
-                            key={`ellipsis-${idx}`}
-                            className={`px-3 py-2 ${
-                              darkMode ? "text-[#9CA3AF]" : "text-[#6B7280]"
-                            }`}
-                          >
-                            ...
-                          </span>
-                        ) : (
-                          <button
-                            key={pageNum}
-                            onClick={() => paginate(pageNum)}
-                            className={`px-3 py-2 rounded-lg font-medium transition-all ${
-                              currentPage === pageNum
-                                ? "bg-[#1E40AF] text-white shadow-md"
-                                : darkMode
-                                  ? "bg-[#374151] text-[#D1D5DB] hover:bg-[#4B5563]"
-                                  : "bg-[#F3F4F6] text-[#374151] hover:bg-[#E5E7EB]"
-                            }`}
-                          >
-                            {pageNum}
-                          </button>
-                        ),
-                      )}
-                    </div>
+              <span className={`px-3 py-1 rounded-lg text-sm font-medium ${
+                darkMode ? "bg-[#374151] text-white" : "bg-[#E5E7EB] text-[#374151]"
+              }`}>
+                Page {currentPage} of {totalPages}
+              </span>
 
                     <button
                       onClick={goToNextPage}
@@ -923,14 +1070,19 @@ export default function Page() {
                       <ChevronRight className="w-5 h-5" />
                     </button>
                   </div>
-                </div>
-              )}
-            </div>
             </>
-            )}
+              )}
           </div>
         </main>
       </div>
     </AuthGuard>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading...</div>}>
+      <PageContent />
+    </Suspense>
   );
 }
