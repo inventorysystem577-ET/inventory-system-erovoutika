@@ -695,6 +695,33 @@ export default function ProductInPage() {
     setSuccessBar("");
     setAlternativeRequest(null);
 
+    // Enhanced validation for product codes - ensure unique codes and one code per product
+    if (productCode) {
+      // Check if product code already exists with different product name
+      const existingProducts = products || [];
+      const duplicateCode = existingProducts.find(existingProduct => 
+        existingProduct.product_code === productCode.trim() && existingProduct.product_name !== productName
+      );
+      
+      if (duplicateCode) {
+        setErrorBar(`Product code "${productCode}" is already assigned to product "${duplicateCode.product_name}". Each product must have a unique code. Please use a different product code.`);
+        return;
+      }
+    }
+
+    // Check if product name already exists with different code
+    if (productName) {
+      const existingProducts = products || [];
+      const existingWithDifferentCode = existingProducts.find(product => 
+        product.product_name === productName && product.product_code !== productCode.trim()
+      );
+      
+      if (existingWithDifferentCode) {
+        setErrorBar(`Product "${productName}" already exists with product code "${existingWithDifferentCode.product_code}". Each product can only have one code. Please use the existing product code or update the existing product.`);
+        return;
+      }
+    }
+
     const result = await handleAddProductIn(
       productName,
       quantityToAdd,
@@ -836,6 +863,58 @@ export default function ProductInPage() {
           return;
         }
 
+        // Enhanced validation for product codes in bulk mode
+        const rowProductCode = (row?.productCode || "").toString().trim();
+        if (rowProductCode) {
+          // Check for duplicate codes within the current batch
+          const duplicateCodeInBatch = bulkProducts.find((otherRow, otherIndex) => 
+            otherIndex !== index && 
+            (otherRow?.productCode || "").toString().trim() === rowProductCode &&
+            (otherRow?.product_name || "").toString().trim() !== productName
+          );
+          
+          if (duplicateCodeInBatch) {
+            validationErrors.push(`Row ${index + 1}: product code "${rowProductCode}" is already assigned to product "${duplicateCodeInBatch.product_name}" in this batch. Each product must have a unique code.`);
+            return;
+          }
+          
+          // Check against existing products in database
+          const existingProducts = products || [];
+          const existingCode = existingProducts.find(existingProduct => 
+            existingProduct.product_code === rowProductCode && existingProduct.product_name !== productName
+          );
+          
+          if (existingCode) {
+            validationErrors.push(`Row ${index + 1}: product code "${rowProductCode}" is already assigned to product "${existingCode.product_name}". Each product must have a unique code. Please use a different product code.`);
+            return;
+          }
+        }
+        
+        // Check if product name already exists with different code
+        if (productName) {
+          const existingProducts = products || [];
+          const existingWithDifferentCode = existingProducts.find(product => 
+            product.product_name === productName && product.product_code !== rowProductCode
+          );
+          
+          if (existingWithDifferentCode) {
+            validationErrors.push(`Row ${index + 1}: product "${productName}" already exists with product code "${existingWithDifferentCode.product_code}". Each product can only have one code. Please use the existing product code or update the existing product.`);
+            return;
+          }
+          
+          // Check for duplicate names with different codes within the batch
+          const duplicateNameInBatch = bulkProducts.find((otherRow, otherIndex) => 
+            otherIndex !== index && 
+            (otherRow?.product_name || "").toString().trim() === productName &&
+            (otherRow?.productCode || "").toString().trim() !== rowProductCode
+          );
+          
+          if (duplicateNameInBatch) {
+            validationErrors.push(`Row ${index + 1}: product "${productName}" appears multiple times with different codes ("${rowProductCode}" and "${duplicateNameInBatch.productCode}"). Each product can only have one code. Please use consistent codes.`);
+            return;
+          }
+        }
+
         const config = products.find(
           (p) => normalizeName(p.name) === normalizeName(productName),
         );
@@ -897,6 +976,7 @@ export default function ProductInPage() {
             description: (row?.description || "").toString().trim() || null,
             price: lineTotalPrice,
             category: row?.category || PRODUCT_CATEGORIES.OTHER,
+            product_code: rowProductCode || null,
           },
         });
       });

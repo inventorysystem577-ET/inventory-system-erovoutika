@@ -251,21 +251,37 @@ function PageContent() {
       return;
     }
 
-    // Check for duplicate item codes with different names in single input mode
-    if (isSingleInput && itemCode) {
-      const existingItems = items.filter(item => item.item_name && item.item_name !== name);
-      const duplicateCode = existingItems.find(existingItem => 
-        existingItem.item_code && existingItem.item_code === itemCode
-      );
+    // Enhanced validation for single input mode - ensure unique codes and one code per item
+    if (isSingleInput) {
+      // If manual code is provided, ensure it's unique
+      if (itemCode) {
+        const existingItems = items.filter(item => item.item_name && item.item_name !== name);
+        const duplicateCode = existingItems.find(existingItem => 
+          existingItem.item_code && existingItem.item_code === itemCode
+        );
+        
+        if (duplicateCode) {
+          alert(`Item code "${itemCode}" is already assigned to item "${duplicateCode.item_name}". Each item must have a unique code. Please use a different item code.`);
+          return;
+        }
+      }
       
-      if (duplicateCode) {
-        alert(`Item code "${itemCode}" is already assigned to item "${duplicateCode.item_name}". Please use a different item code.`);
-        return;
+      // Ensure item name doesn't already exist with a different code
+      if (name) {
+        const existingWithDifferentCode = items.find(item => 
+          item.item_name === name && item.item_code !== itemCode
+        );
+        
+        if (existingWithDifferentCode) {
+          alert(`Item "${name}" already exists with item code "${existingWithDifferentCode.item_code}". Each item can only have one code. Please use the existing item code or update the existing item.`);
+          return;
+        }
       }
     }
 
-    // Check for duplicate item codes with different names in multiple input mode
+    // Enhanced validation for multiple input mode - ensure unique codes and one code per item
     if (!isSingleInput) {
+      // Check for duplicate codes within the current batch
       const codesWithNames = parcelsToProcess.filter(row => row.itemCode && row.name);
       const duplicateCodes = codesWithNames.filter((row, index, self) => {
         return codesWithNames.findIndex(other => 
@@ -275,45 +291,45 @@ function PageContent() {
       
       if (duplicateCodes.length > 0) {
         const duplicate = duplicateCodes[0];
-        alert(`Item code "${duplicate.itemCode}" is already assigned to item "${duplicate.name}". Please use a different item code.`);
+        alert(`Item code "${duplicate.itemCode}" is already assigned to item "${duplicate.name}" in this batch. Each item must have a unique code. Please use a different item code.`);
         return;
       }
-    }
-
-    // Additional validation: Check if item name already exists with different code
-    if (isSingleInput && name) {
-      const existingWithDifferentCode = items.find(item => 
-        item.item_name === name && item.item_code !== itemCode
-      );
       
-      if (existingWithDifferentCode) {
-        alert(`Item "${name}" already exists with item code "${existingWithDifferentCode.item_code}". Please use that item code or update the existing item.`);
-        return;
-      }
-    }
-
-    // Additional validation for multiple input mode
-    if (!isSingleInput) {
-      const duplicates = parcelsToProcess.filter((row, index, self) => {
+      // Check for duplicate names with different codes within the current batch
+      const duplicateNames = parcelsToProcess.filter((row, index, self) => {
         return parcelsToProcess.findIndex(other => 
-          (other.itemCode === row.itemCode && other.name !== row.name) ||
-          (other.name === row.name && other.item_code !== row.itemCode)
+          other.name === row.name && other.itemCode !== row.itemCode
         ) !== index;
       });
       
-      if (duplicates.length > 0) {
-        const duplicate = duplicates[0];
-        const conflictType = duplicate.itemCode === parcelsToProcess.find(r => r.itemCode === duplicate.itemCode)?.itemCode ? "code" : "name";
-        const conflictingItem = parcelsToProcess.find(r => 
-          (conflictType === "code" && r.itemCode === duplicate.itemCode) ||
-          (conflictType === "name" && r.name === duplicate.name)
-        );
-        
-        alert(`Duplicate detected: ${conflictType === "code" ? 
-          `Item code "${duplicate.itemCode}" is already assigned to item "${conflictingItem.name}"` : 
-          `Item "${duplicate.name}" already exists with item code "${conflictingItem.item_code}"`
-        }. Please use a different item code or update the existing item.`);
+      if (duplicateNames.length > 0) {
+        const duplicate = duplicateNames[0];
+        const conflictingItem = parcelsToProcess.find(r => r.name === duplicate.name && r.itemCode !== duplicate.itemCode);
+        alert(`Item "${duplicate.name}" appears multiple times with different codes ("${duplicate.itemCode}" and "${conflictingItem.itemCode}"). Each item can only have one code. Please use consistent codes.`);
         return;
+      }
+      
+      // Check against existing items in database
+      for (const row of parcelsToProcess) {
+        if (row.itemCode && row.name) {
+          const existingItem = items.find(item => 
+            item.item_name === row.name && item.item_code !== row.itemCode
+          );
+          
+          if (existingItem) {
+            alert(`Item "${row.name}" already exists with item code "${existingItem.item_code}". Each item can only have one code. Please use the existing item code or update the existing item.`);
+            return;
+          }
+          
+          const existingCode = items.find(item => 
+            item.item_code === row.itemCode && item.item_name !== row.name
+          );
+          
+          if (existingCode) {
+            alert(`Item code "${row.itemCode}" is already assigned to item "${existingCode.item_name}". Each item must have a unique code. Please use a different item code.`);
+            return;
+          }
+        }
       }
     }
 
