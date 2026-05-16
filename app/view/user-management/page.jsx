@@ -32,7 +32,7 @@ export default function UserManagementPage() {
 
   // Edit modal
   const [editingUser, setEditingUser]   = useState(null);
-  const [editForm, setEditForm]         = useState({ name: "", role: "" });
+  const [editForm, setEditForm]         = useState({ name: "", role: "", password: "" });
   const [editPending, setEditPending]   = useState(false);
 
   // Delete confirm
@@ -124,19 +124,26 @@ export default function UserManagementPage() {
   // ── Edit (approved tab) ───────────────────────────────────
   const openEdit = (user) => {
     setEditingUser(user);
-    setEditForm({ name: user.name, role: user.role });
+    setEditForm({ name: user.name, role: user.role, password: "" });
   };
-  const closeEdit = () => { setEditingUser(null); setEditForm({ name: "", role: "" }); };
+  const closeEdit = () => { setEditingUser(null); setEditForm({ name: "", role: "", password: "" }); };
 
   const submitEdit = async () => {
   if (!editForm.name.trim() || !editForm.role) return;
   setEditPending(true);
 
   try {
-    await handleUpdateUser(editingUser.id, {
+    const updateData = {
       name: editForm.name.trim(),
       role: editForm.role,
-    });
+    };
+    
+    // Only include password if it's provided
+    if (editForm.password && editForm.password.trim()) {
+      updateData.password = editForm.password.trim();
+    }
+
+    await handleUpdateUser(editingUser.id, updateData);
 
     await logActivity({
       userId: userEmail || null,
@@ -144,7 +151,7 @@ export default function UserManagementPage() {
       userType: role || "staff",
       action: "UPDATE USER",
       module: "User Management",
-      details: `Updated user ${editingUser.name} -> name: ${editForm.name.trim()}, role: ${editForm.role}`,
+      details: `Updated user ${editingUser.name} -> name: ${editForm.name.trim()}, role: ${editForm.role}${updateData.password ? ', password changed' : ''}`,
     });
 
     setFeedback({ type: "success", message: `${editForm.name} updated successfully.` });
@@ -424,8 +431,8 @@ export default function UserManagementPage() {
       {editingUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className={`w-full max-w-md mx-4 rounded-xl border p-6 shadow-xl ${darkMode ? "bg-[#1F2937] border-[#374151] text-white" : "bg-white border-[#E5E7EB] text-gray-900"}`}>
-            <h2 className="text-lg font-bold mb-1">Edit User</h2>
-            <p className={`text-sm mb-5 ${subtextClass}`}>Update {editingUser.email}&apos;s name or role.</p>
+            <h2 className="text-lg font-bold mb-1">Edit User Profile</h2>
+            <p className={`text-sm mb-5 ${subtextClass}`}>Update {editingUser.email}&apos;s name, role, or password.</p>
             <div className="space-y-4">
               <div>
                 <label className={`block text-xs font-semibold uppercase tracking-wider mb-1.5 ${subtextClass}`}>Full Name</label>
@@ -448,6 +455,17 @@ export default function UserManagementPage() {
                     <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <label className={`block text-xs font-semibold uppercase tracking-wider mb-1.5 ${subtextClass}`}>New Password (Optional)</label>
+                <input
+                  type="password"
+                  value={editForm.password}
+                  onChange={(e) => setEditForm((f) => ({ ...f, password: e.target.value }))}
+                  className={inputClass}
+                  placeholder="Leave blank to keep current password"
+                />
+                <p className={`text-xs mt-1 ${subtextClass}`}>Only enter a new password if you want to change it</p>
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-6">

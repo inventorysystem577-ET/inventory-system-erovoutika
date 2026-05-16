@@ -16,9 +16,9 @@ export const fetchAllUsers = async ({ role = null, search = null, status = "appr
   }
 };
 
-export const handleUpdateUser = async (id, { name, role }) => {
+export const handleUpdateUser = async (id, { name, role, password }) => {
   try {
-    const response = await axios.put("/api/auth/user-management", { id, name, role });
+    const response = await axios.put("/api/auth/user-management", { id, name, role, password });
     return response.data;
   } catch (error) {
     if (error.response) throw new Error(error.response.data?.message || "Failed to update user");

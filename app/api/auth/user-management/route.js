@@ -22,10 +22,17 @@ export async function GET(req) {
 
 export async function PUT(req) {
   try {
-    const { id, name, role } = await req.json();
+    const { id, name, role, password } = await req.json();
     if (!id || !name || !role)
       return new Response(JSON.stringify({ message: "id, name, and role are required" }), { status: 400 });
-    const updated = await updateUserProfile(id, { name, role });
+    
+    const updateData = { name, role };
+    // Only include password if it's provided
+    if (password && password.trim()) {
+      updateData.password = password.trim();
+    }
+    
+    const updated = await updateUserProfile(id, updateData);
     return new Response(JSON.stringify({ message: "User updated successfully", user: updated }), { status: 200 });
   } catch (error) {
     return new Response(JSON.stringify({ message: error.message || "Failed to update user" }), { status: 500 });

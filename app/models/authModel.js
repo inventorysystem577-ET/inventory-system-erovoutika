@@ -251,9 +251,10 @@ export async function getAllUsers({
   return data || [];
 }
 
-export async function updateUserProfile(id, { name, role }) {
+export async function updateUserProfile(id, { name, role, password }) {
   const now = new Date().toISOString();
 
+  // Update user profile in database
   const { data, error } = await getSupabaseAdmin()
     .from(APPROVED_USERS_TABLE)
     .update({ name, role, updated_at: now })
@@ -262,6 +263,24 @@ export async function updateUserProfile(id, { name, role }) {
     .single();
 
   if (error) throw new Error(error.message);
+
+  // If password is provided, update it in Supabase Auth
+  if (password && password.trim()) {
+    try {
+      const { error: passwordError } = await getSupabaseAdmin().auth.admin.updateUserById(id, {
+        password: password.trim(),
+      });
+      
+      if (passwordError) {
+        console.warn(`Failed to update password for user ${id}:`, passwordError.message);
+        // Don't throw error, allow profile update to succeed even if password update fails
+      }
+    } catch (passwordError) {
+      console.warn(`Failed to update password for user ${id}:`, passwordError.message);
+      // Don't throw error, allow profile update to succeed even if password update fails
+    }
+  }
+
   return data;
 }
 
