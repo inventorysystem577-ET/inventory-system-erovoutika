@@ -31,9 +31,11 @@ import {
 } from "../../controller/productController";
 import { buildProductCode, buildSku } from "../../utils/inventoryMeta";
 
+// Default thresholds are now 0-0 (manual input required)
+// Users must set their own thresholds per item
 const DEFAULT_STOCK_THRESHOLDS = {
-  critical: 5,
-  low: 10,
+  critical: 0,
+  low: 0,
 };
 
 const STOCK_THRESHOLDS_STORAGE_KEY = "inventory-item-thresholds-v1";
@@ -49,15 +51,19 @@ const sanitizeThresholds = (value = {}) => {
   const criticalRaw = Number(value.critical);
   const lowRaw = Number(value.low);
 
+  // Allow 0 as valid value (manual input mode)
   const critical = Number.isFinite(criticalRaw)
-    ? Math.max(1, Math.floor(criticalRaw))
+    ? Math.max(0, Math.floor(criticalRaw))
     : DEFAULT_STOCK_THRESHOLDS.critical;
 
   let low = Number.isFinite(lowRaw)
-    ? Math.max(2, Math.floor(lowRaw))
+    ? Math.max(0, Math.floor(lowRaw))
     : DEFAULT_STOCK_THRESHOLDS.low;
 
-  if (low <= critical) low = critical + 1;
+  // Only enforce low > critical if both are > 0
+  if (critical > 0 && low > 0 && low <= critical) {
+    low = critical + 1;
+  }
 
   return { critical, low };
 };
@@ -121,13 +127,17 @@ export default function page() {
     return sanitizeThresholds(itemThresholds[key]);
   };
 
-  const getStockStatus = (quantity, threshold = DEFAULT_STOCK_THRESHOLDS) => {
-    const qty = Number(quantity || 0);
+  const getStockStatus = (qty, threshold = DEFAULT_STOCK_THRESHOLDS) => {
     const normalizedThreshold = sanitizeThresholds(threshold);
 
+    // If thresholds are both 0 (not set), only show out of stock or available
+    if (normalizedThreshold.critical === 0 && normalizedThreshold.low === 0) {
+      return qty <= 0 ? "out" : "available";
+    }
+
     if (qty <= 0) return "out";
-    if (qty <= normalizedThreshold.critical) return "critical";
-    if (qty < normalizedThreshold.low) return "low";
+    if (normalizedThreshold.critical > 0 && qty <= normalizedThreshold.critical) return "critical";
+    if (normalizedThreshold.low > 0 && qty < normalizedThreshold.low) return "low";
     return "available";
   };
 
