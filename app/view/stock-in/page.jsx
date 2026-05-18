@@ -62,30 +62,10 @@ function PageContent() {
   ]);
   
   // Common date and time for all parcels
-  const getCurrentDate = () => {
-    const now = new Date();
-    return now.toISOString().slice(0, 10);
-  };
-  
-  const getCurrentTime = () => {
-    const now = new Date();
-    let hour = now.getHours();
-    const minute = now.getMinutes();
-    const ampm = hour >= 12 ? "PM" : "AM";
-    hour = hour % 12;
-    hour = hour ? hour : 12;
-    return {
-      hour: String(hour),
-      minute: minute < 10 ? `0${minute}` : String(minute),
-      ampm
-    };
-  };
-  
-  const currentTime = getCurrentTime();
-  const [date, setDate] = useState(getCurrentDate());
-  const [timeHour, setTimeHour] = useState(currentTime.hour);
-  const [timeMinute, setTimeMinute] = useState(currentTime.minute);
-  const [timeAMPM, setTimeAMPM] = useState(currentTime.ampm);
+  const [date, setDate] = useState("");
+  const [timeHour, setTimeHour] = useState("1");
+  const [timeMinute, setTimeMinute] = useState("00");
+  const [timeAMPM, setTimeAMPM] = useState("AM");
   const [shippingMode, setShippingMode] = useState("");
   const [clientName, setClientName] = useState("");
   const [price, setPrice] = useState("");
@@ -251,97 +231,6 @@ function PageContent() {
       return;
     }
 
-    // Enhanced validation for single input mode - ensure unique codes and one code per item
-    if (isSingleInput) {
-      // Debug: Check if items data is loaded
-      console.log('Debug - Items data:', items);
-      console.log('Debug - Current itemCode:', itemCode);
-      console.log('Debug - Current name:', name);
-      
-      // If manual code is provided, ensure it's unique
-      if (itemCode && itemCode.trim()) {
-        const existingItems = items.filter(item => item.item_name && item.item_name !== name);
-        console.log('Debug - Filtered existingItems:', existingItems);
-        
-        const duplicateCode = existingItems.find(existingItem => 
-          existingItem.item_code && existingItem.item_code === itemCode.trim()
-        );
-        
-        console.log('Debug - Found duplicateCode:', duplicateCode);
-        
-        if (duplicateCode) {
-          alert(`⚠️ Code Already Exists!\n\nItem code "${itemCode}" is already assigned to item "${duplicateCode.item_name}".\n\nEach item must have a unique code. Please:\n• Use a different item code, OR\n• Use the existing item instead`);
-          return;
-        }
-      }
-      
-      // Ensure item name doesn't already exist with a different code
-      if (name) {
-        const existingWithDifferentCode = items.find(item => 
-          item.item_name === name && item.item_code !== itemCode
-        );
-        
-        if (existingWithDifferentCode) {
-          alert(`⚠️ Item Already Exists!\n\nItem "${name}" already exists with item code "${existingWithDifferentCode.item_code}".\n\nEach item can only have one code. Please:\n• Use the existing item code "${existingWithDifferentCode.item_code}", OR\n• Update the existing item instead`);
-          return;
-        }
-      }
-    }
-
-    // Enhanced validation for multiple input mode - ensure unique codes and one code per item
-    if (!isSingleInput) {
-      // Check for duplicate codes within the current batch
-      const codesWithNames = parcelsToProcess.filter(row => row.itemCode && row.name);
-      const duplicateCodes = codesWithNames.filter((row, index, self) => {
-        return codesWithNames.findIndex(other => 
-          other.itemCode === row.itemCode && other.name !== row.name
-        ) !== index;
-      });
-      
-      if (duplicateCodes.length > 0) {
-        const duplicate = duplicateCodes[0];
-        alert(`⚠️ Duplicate Code in Batch!\n\nItem code "${duplicate.itemCode}" is already assigned to item "${duplicate.name}" in this batch.\n\nEach item must have a unique code. Please:\n• Use a different item code for this item, OR\n• Remove the duplicate from this batch`);
-        return;
-      }
-      
-      // Check for duplicate names with different codes within the current batch
-      const duplicateNames = parcelsToProcess.filter((row, index, self) => {
-        return parcelsToProcess.findIndex(other => 
-          other.name === row.name && other.itemCode !== row.itemCode
-        ) !== index;
-      });
-      
-      if (duplicateNames.length > 0) {
-        const duplicate = duplicateNames[0];
-        const conflictingItem = parcelsToProcess.find(r => r.name === duplicate.name && r.itemCode !== duplicate.itemCode);
-        alert(`⚠️ Same Item, Different Codes!\n\nItem "${duplicate.name}" appears multiple times with different codes:\n• "${duplicate.itemCode}"\n• "${conflictingItem.itemCode}"\n\nEach item can only have one code. Please:\n• Use the same code for all instances, OR\n• Remove duplicates from this batch`);
-        return;
-      }
-      
-      // Check against existing items in database
-      for (const row of parcelsToProcess) {
-        if (row.itemCode && row.name) {
-          const existingItem = items.find(item => 
-            item.item_name === row.name && item.item_code !== row.itemCode
-          );
-          
-          if (existingItem) {
-            alert(`⚠️ Item Already Exists!\n\nItem "${row.name}" already exists with item code "${existingItem.item_code}".\n\nEach item can only have one code. Please:\n• Use the existing item code "${existingItem.item_code}", OR\n• Update the existing item instead`);
-            return;
-          }
-          
-          const existingCode = items.find(item => 
-            item.item_code === row.itemCode && item.item_name !== row.name
-          );
-          
-          if (existingCode) {
-            alert(`⚠️ Code Already Exists!\n\nItem code "${row.itemCode}" is already assigned to item "${existingCode.item_name}".\n\nEach item must have a unique code. Please:\n• Use a different item code, OR\n• Use the existing item instead`);
-            return;
-          }
-        }
-      }
-    }
-
     const confirmed = window.confirm(
       `Confirm Stock In: Are you sure you want to add ${validParcels.length} item(s) to stock in?`,
     );
@@ -394,12 +283,10 @@ function PageContent() {
       clientName: "",
       itemCode: "",
     }]);
-    const resetTime = getCurrentTime();
-    const resetDate = getCurrentDate();
-    setDate(resetDate);
-    setTimeHour(resetTime.hour);
-    setTimeMinute(resetTime.minute);
-    setTimeAMPM(resetTime.ampm);
+    setDate("");
+    setTimeHour("1");
+    setTimeMinute("00");
+    setTimeAMPM("AM");
     setShippingMode("");
     setClientName("");
     setPrice("");

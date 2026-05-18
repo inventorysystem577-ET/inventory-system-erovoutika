@@ -112,8 +112,8 @@ export const addDefectiveItem = async ({
   }
 };
 
-// Delete a defective item record (no inventory restoration)
-export const deleteDefectiveItem = async (recordId) => {
+// Delete a defective item record (and optionally restore inventory)
+export const deleteDefectiveItem = async (recordId, restoreInventory = false) => {
   try {
     const defectiveItems = getDefectiveItems();
     const record = defectiveItems.find((item) => item.id === recordId);
@@ -126,11 +126,38 @@ export const deleteDefectiveItem = async (recordId) => {
     const updatedItems = defectiveItems.filter((item) => item.id !== recordId);
     saveDefectiveItems(updatedItems);
     
-    // No inventory restoration - quantity is only restored when items are marked as fixed
-    return {
-      success: true,
-      message: "Record deleted successfully",
-    };
+    // Optionally restore inventory
+    if (restoreInventory) {
+      const { getParcelInItems, updateParcelInItem } = await import("../models/parcelShippedModel");
+      const inventoryResult = await getParcelInItems();
+      const inventoryItems = inventoryResult.data || [];
+      
+      if (inventoryResult.error) {
+        return { success: false, error: inventoryResult.error.message };
+      }
+      
+      const inventoryItem = inventoryItems.find(
+        (item) => (item.item_name || item.name)?.toLowerCase() === record.itemName.toLowerCase()
+      );
+      
+      if (inventoryItem) {
+        const currentQty = Number(inventoryItem.quantity) || 0;
+        const restoredQty = Number(record.quantity) || 0;
+        
+        await updateParcelInItem(inventoryItem.id, {
+          ...inventoryItem,
+          quantity: currentQty + restoredQty,
+        });
+        
+        return {
+          success: true,
+          restoredQty: restoredQty,
+          message: `Record deleted and ${restoredQty} units restored to inventory`,
+        };
+      }
+    }
+    
+    return { success: true };
   } catch (error) {
     console.error("Error deleting defective item:", error);
     return { success: false, error: error.message };
