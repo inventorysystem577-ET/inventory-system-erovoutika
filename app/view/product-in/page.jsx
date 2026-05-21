@@ -1654,7 +1654,7 @@ export default function ProductInPage() {
                             style={{ animationDelay: `${index * 0.03}s` }}
                           >
                             <td className="px-4 py-3 text-center align-middle text-xs sm:text-sm whitespace-nowrap w-[140px] min-w-[140px]">
-                              {item.product_code || buildProductCode(item)}
+                              {item.product_code || ""}
                             </td>
 
                             <td className="px-4 py-3 text-center align-middle font-semibold text-sm sm:text-base whitespace-nowrap w-[150px] min-w-[150px]">
@@ -2189,7 +2189,7 @@ export default function ProductInPage() {
               </div>
               <div>
                 <h3 className="font-semibold mb-2 text-red-500">
-                  Missing / Kulang Stocks
+                  Missing / No available stocks
                 </h3>
                 {missingComponentsForSelected.length === 0 ? (
                   <p

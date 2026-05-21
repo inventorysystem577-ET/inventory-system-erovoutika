@@ -171,6 +171,9 @@ export default function Page() {
   const [editingDescriptionId, setEditingDescriptionId] = useState(null);
   const [editingDescriptionValue, setEditingDescriptionValue] = useState("");
   const [isSavingDescription, setIsSavingDescription] = useState(false);
+  const [editingCode, setEditingCode] = useState({ type: null, id: null, value: "" });
+  const [isSavingCode, setIsSavingCode] = useState(false);
+  const [codeUpdateError, setCodeUpdateError] = useState("");
   const [parcelOutItems, setParcelOutItems] = useState([]);
   const [productOutItems, setProductOutItems] = useState([]);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
@@ -254,6 +257,64 @@ export default function Page() {
     );
     cancelEditingDescription();
     setIsSavingDescription(false);
+  };
+
+  const startEditingCode = (type, item) => {
+    setCodeUpdateError("");
+    setEditingCode({
+      type,
+      id: item.id,
+      value: type === "parcel" ? item.item_code || "" : item.product_code || "",
+    });
+  };
+
+  const cancelEditingCode = () => {
+    setEditingCode({ type: null, id: null, value: "" });
+    setCodeUpdateError("");
+  };
+
+  const saveEditingCode = async () => {
+    setCodeUpdateError("");
+    if (!editingCode.type || editingCode.id == null) return;
+    setIsSavingCode(true);
+
+    const trimmedCode = editingCode.value.toString().trim() || null;
+    let result;
+
+    if (editingCode.type === "parcel") {
+      result = await updateParcelInItem(editingCode.id, {
+        item_code: trimmedCode,
+      });
+    } else {
+      result = await updateProductIn(editingCode.id, {
+        product_code: trimmedCode,
+      });
+    }
+
+    if (result?.error) {
+      setCodeUpdateError(
+        result.error?.message || "Failed to save code. Please try again.",
+      );
+      setIsSavingCode(false);
+      return;
+    }
+
+    if (editingCode.type === "parcel") {
+      setParcelItems((prev) =>
+        prev.map((row) =>
+          row.id === editingCode.id ? { ...row, item_code: trimmedCode } : row,
+        ),
+      );
+    } else {
+      setProductItems((prev) =>
+        prev.map((row) =>
+          row.id === editingCode.id ? { ...row, product_code: trimmedCode } : row,
+        ),
+      );
+    }
+
+    cancelEditingCode();
+    setIsSavingCode(false);
   };
 
   // Import states
@@ -564,7 +625,6 @@ export default function Page() {
     const keyword = parcelSearch.trim().toLowerCase();
     if (!keyword) return statusMatch && categoryMatch;
     const manualCode = (item.item_code || "").toLowerCase();
-    const autoCode = buildProductCode(item, "CMP").toLowerCase();
     const sku = buildSku(item).toLowerCase();
     const name = (item.name || "").toLowerCase();
     return (
@@ -572,7 +632,6 @@ export default function Page() {
       categoryMatch &&
       (name.includes(keyword) ||
         manualCode.includes(keyword) ||
-        autoCode.includes(keyword) ||
         sku.includes(keyword))
     );
   });
@@ -591,7 +650,6 @@ export default function Page() {
     const keyword = productSearch.trim().toLowerCase();
     if (!keyword) return statusMatch && categoryMatch;
     const manualCode = (item.product_code || "").toLowerCase();
-    const autoCode = buildProductCode(item).toLowerCase();
     const sku = buildSku(item).toLowerCase();
     const name = (item.product_name || "").toLowerCase();
     return (
@@ -599,7 +657,6 @@ export default function Page() {
       categoryMatch &&
       (name.includes(keyword) ||
         manualCode.includes(keyword) ||
-        autoCode.includes(keyword) ||
         sku.includes(keyword))
     );
   });
@@ -1765,7 +1822,57 @@ export default function Page() {
                             className={`transition-colors ${darkMode ? "hover:bg-[#374151]" : "hover:bg-[#F9FAFB]"}`}
                           >
                             <td className="px-4 py-3 text-sm">
-                              {item.item_code || buildProductCode(item, "CMP")}
+                              {editingCode.type === "parcel" && editingCode.id === item.id ? (
+                                <div className="flex flex-col gap-2">
+                                  <input
+                                    type="text"
+                                    value={editingCode.value}
+                                    onChange={(e) =>
+                                      setEditingCode((prev) => ({
+                                        ...prev,
+                                        value: e.target.value,
+                                      }))
+                                    }
+                                    className={`w-full rounded-lg border px-3 py-2 text-sm transition-all ${
+                                      darkMode
+                                        ? "bg-[#111827] border-[#374151] text-white"
+                                        : "bg-white border-[#D1D5DB] text-black"
+                                    }`}
+                                    placeholder="Enter item code"
+                                  />
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={saveEditingCode}
+                                      disabled={isSavingCode}
+                                      className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold ${
+                                        isSavingCode
+                                          ? "bg-gray-400 text-white cursor-not-allowed"
+                                          : "bg-green-600 hover:bg-green-700 text-white"
+                                      }`}
+                                    >
+                                      <Check className="w-4 h-4" /> Save
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={cancelEditingCode}
+                                      disabled={isSavingCode}
+                                      className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold ${
+                                        darkMode
+                                          ? "bg-[#374151] text-[#D1D5DB] hover:bg-[#4B5563]"
+                                          : "bg-[#F3F4F6] text-[#374151] hover:bg-[#E5E7EB]"
+                                      }`}
+                                    >
+                                      <X className="w-4 h-4" /> Cancel
+                                    </button>
+                                  </div>
+                                  {codeUpdateError ? (
+                                    <p className="text-xs text-red-500">{codeUpdateError}</p>
+                                  ) : null}
+                                </div>
+                              ) : (
+                                item.item_code || ""
+                              )}
                             </td>
                             <td className="px-4 py-3 text-sm font-medium align-top">
                               <div className="flex items-start gap-2 min-w-0">
@@ -1940,6 +2047,19 @@ export default function Page() {
                                       aria-label="Set stock thresholds"
                                     >
                                       <BarChart3 className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => startEditingCode("parcel", item)}
+                                      className={`inline-flex items-center justify-center p-2 rounded-lg border transition ${
+                                        darkMode
+                                          ? "border-[#374151] hover:bg-[#374151] text-sky-300"
+                                          : "border-[#D1D5DB] hover:bg-[#EFF6FF] text-[#0284C7]"
+                                      }`}
+                                      title="Edit item code"
+                                      aria-label="Edit item code"
+                                    >
+                                      <PencilLine className="w-4 h-4" />
                                     </button>
                                   </>
                                 ) : null}
@@ -2311,7 +2431,57 @@ export default function Page() {
                             className={`transition-colors ${darkMode ? "hover:bg-[#374151]" : "hover:bg-[#F9FAFB]"}`}
                           >
                             <td className="px-4 py-3 text-sm">
-                              {item.product_code || buildProductCode(item)}
+                              {editingCode.type === "product" && editingCode.id === item.id ? (
+                                <div className="flex flex-col gap-2">
+                                  <input
+                                    type="text"
+                                    value={editingCode.value}
+                                    onChange={(e) =>
+                                      setEditingCode((prev) => ({
+                                        ...prev,
+                                        value: e.target.value,
+                                      }))
+                                    }
+                                    className={`w-full rounded-lg border px-3 py-2 text-sm transition-all ${
+                                      darkMode
+                                        ? "bg-[#111827] border-[#374151] text-white"
+                                        : "bg-white border-[#D1D5DB] text-black"
+                                    }`}
+                                    placeholder="Enter product code"
+                                  />
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={saveEditingCode}
+                                      disabled={isSavingCode}
+                                      className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold ${
+                                        isSavingCode
+                                          ? "bg-gray-400 text-white cursor-not-allowed"
+                                          : "bg-green-600 hover:bg-green-700 text-white"
+                                      }`}
+                                    >
+                                      <Check className="w-4 h-4" /> Save
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={cancelEditingCode}
+                                      disabled={isSavingCode}
+                                      className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold ${
+                                        darkMode
+                                          ? "bg-[#374151] text-[#D1D5DB] hover:bg-[#4B5563]"
+                                          : "bg-[#F3F4F6] text-[#374151] hover:bg-[#E5E7EB]"
+                                      }`}
+                                    >
+                                      <X className="w-4 h-4" /> Cancel
+                                    </button>
+                                  </div>
+                                  {codeUpdateError ? (
+                                    <p className="text-xs text-red-500">{codeUpdateError}</p>
+                                  ) : null}
+                                </div>
+                              ) : (
+                                item.product_code || ""
+                              )}
                             </td>
                             <td className="px-4 py-3 text-sm font-medium align-top">
                               <div className="flex items-start gap-2 min-w-0">
@@ -2556,6 +2726,19 @@ export default function Page() {
                                       aria-label="Set stock thresholds"
                                     >
                                       <BarChart3 className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => startEditingCode("product", item)}
+                                      className={`inline-flex items-center justify-center p-2 rounded-lg border transition ${
+                                        darkMode
+                                          ? "border-[#374151] hover:bg-[#374151] text-sky-300"
+                                          : "border-[#D1D5DB] hover:bg-[#EFF6FF] text-[#0284C7]"
+                                      }`}
+                                      title="Edit product code"
+                                      aria-label="Edit product code"
+                                    >
+                                      <PencilLine className="w-4 h-4" />
                                     </button>
                                   </>
                                 ) : null}

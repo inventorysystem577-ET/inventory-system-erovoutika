@@ -60,7 +60,15 @@ export const useAuth = () => {
         localStorage.removeItem('supabase.auth.token');
         localStorage.removeItem('supabase.auth.refreshToken');
         sessionStorage.clear();
-        router.replace("/");
+        // Only redirect to login when the user is currently on a protected route.
+        if (typeof window !== 'undefined') {
+          const publicPaths = ['/', '/view/login', '/view/register', '/view/forgot-password'];
+          const path = window.location.pathname || '/';
+          const onPublic = publicPaths.some((p) => path.startsWith(p));
+          if (!onPublic) {
+            router.replace('/');
+          }
+        }
         return;
       }
 

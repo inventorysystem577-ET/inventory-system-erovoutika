@@ -8,6 +8,7 @@ import { isAdminRole } from "../utils/roleHelper";
 // Pages staff can access (everything except admin panel)
 const STAFF_ALLOWED_PATHS = [
   "/view/product-in",
+  "/view/product-out",
   "/view/item-transfer",
   "/view/stock-in",
   "/view/stock-out",

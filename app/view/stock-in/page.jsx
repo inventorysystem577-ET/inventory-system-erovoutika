@@ -851,7 +851,7 @@ function PageContent() {
                           style={{ animationDelay: `${index * 0.1}s` }}
                         >
                           <td className="p-3 sm:p-4 text-center align-middle text-xs sm:text-sm whitespace-nowrap">
-                            {item.item_code || buildProductCode(item, "CMP")}
+                            {item.item_code || ""}
                           </td>
                           <td className="p-3 sm:p-4 font-semibold text-sm sm:text-base whitespace-nowrap text-center align-middle">
                             {item.name}
