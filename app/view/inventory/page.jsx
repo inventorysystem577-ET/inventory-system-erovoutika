@@ -161,7 +161,8 @@ export default function Page() {
   const [productCurrentPage, setProductCurrentPage] = useState(1);
   const { role, displayName, userEmail } = useAuth();
   const isAdmin = isAdminRole(role);
-  const canViewHistory = isAdmin || isStaffRole(role);
+  const canEdit = isAdmin || isStaffRole(role);
+  const canViewHistory = canEdit;
   const [isUpdatingCategoryId, setIsUpdatingCategoryId] = useState(null);
   const [categoryTransferError, setCategoryTransferError] = useState("");
   const [descriptionUpdateError, setDescriptionUpdateError] = useState("");
@@ -171,6 +172,7 @@ export default function Page() {
   const [editingDescriptionId, setEditingDescriptionId] = useState(null);
   const [editingDescriptionValue, setEditingDescriptionValue] = useState("");
   const [isSavingDescription, setIsSavingDescription] = useState(false);
+  const [editingNameValue, setEditingNameValue] = useState("");
   const [editingCode, setEditingCode] = useState({ type: null, id: null, value: "" });
   const [isSavingCode, setIsSavingCode] = useState(false);
   const [codeUpdateError, setCodeUpdateError] = useState("");
@@ -200,7 +202,22 @@ export default function Page() {
   });
   const [isMarkingFixed, setIsMarkingFixed] = useState(null);
 
-  const DESCRIPTION_TRUNCATE_LIMIT = 140;
+  const DESCRIPTION_TRUNCATE_LIMIT = 50;
+  const CODE_MAX_LENGTH = 10;
+  const NAME_MAX_LENGTH = 100;
+
+  const COLUMN_WIDTHS = {
+    Code: "w-[8%]",
+    Product: "w-[15%]",
+    SKU: "w-[10%]",
+    Description: "w-[28%]",
+    Category: "w-[15%]",
+    "Stock Quantity": "w-[8%]",
+    Status: "w-[6%]",
+    "Date Added": "w-[6%]",
+    Actions: "w-[6%]",
+  };
+
   const truncateText = (value, maxLength) => {
     const text = (value || "").toString().trim();
     if (!text) return { text: "", isTruncated: false };
@@ -220,47 +237,11 @@ export default function Page() {
     });
   };
 
-  const startEditingDescription = (item) => {
+  const startEditingDescription = (type, item) => {
     setDescriptionUpdateError("");
-    setEditingDescriptionId(item.id);
-    setEditingDescriptionValue((item.description || "").toString());
-  };
-
-  const cancelEditingDescription = () => {
-    setEditingDescriptionId(null);
-    setEditingDescriptionValue("");
-  };
-
-  const saveEditingDescription = async (id) => {
-    setDescriptionUpdateError("");
-    setIsSavingDescription(true);
-
-    const result = await updateProductInDescriptionController(
-      id,
-      editingDescriptionValue,
-    );
-
-    if (!result?.success) {
-      setDescriptionUpdateError(
-        result?.message || "Failed to update description.",
-      );
-      setIsSavingDescription(false);
-      return;
-    }
-
-    setProductItems((prev) =>
-      prev.map((row) =>
-        row.id === id
-          ? { ...row, description: result?.data?.description ?? editingDescriptionValue }
-          : row,
-      ),
-    );
-    cancelEditingDescription();
-    setIsSavingDescription(false);
-  };
-
-  const startEditingCode = (type, item) => {
     setCodeUpdateError("");
+    setEditingDescriptionId(`${type}-${item.id}`);
+    setEditingDescriptionValue((item.description || "").toString());
     setEditingCode({
       type,
       id: item.id,
@@ -268,53 +249,112 @@ export default function Page() {
     });
   };
 
-  const cancelEditingCode = () => {
+  const cancelRowEditing = () => {
+    setEditingDescriptionId(null);
+    setEditingDescriptionValue("");
+    setEditingNameValue("");
     setEditingCode({ type: null, id: null, value: "" });
     setCodeUpdateError("");
+    setDescriptionUpdateError("");
   };
 
-  const saveEditingCode = async () => {
-    setCodeUpdateError("");
+  const saveRowEdit = async () => {
     if (!editingCode.type || editingCode.id == null) return;
+    setCodeUpdateError("");
+    setDescriptionUpdateError("");
     setIsSavingCode(true);
+    setIsSavingDescription(true);
 
     const trimmedCode = editingCode.value.toString().trim() || null;
+    const cleanedDescription = (editingDescriptionValue || "").toString().trim() || null;
+    const trimmedName = (editingNameValue || "").toString().trim() || null;
     let result;
 
     if (editingCode.type === "parcel") {
       result = await updateParcelInItem(editingCode.id, {
         item_code: trimmedCode,
+        item_name: trimmedName,
+        description: cleanedDescription,
       });
     } else {
       result = await updateProductIn(editingCode.id, {
         product_code: trimmedCode,
+        product_name: trimmedName,
+        description: cleanedDescription,
       });
     }
 
     if (result?.error) {
-      setCodeUpdateError(
-        result.error?.message || "Failed to save code. Please try again.",
-      );
+      const message =
+        result.error?.message || "Failed to save code and description. Please try again.";
+      setCodeUpdateError(message);
+      setDescriptionUpdateError(message);
       setIsSavingCode(false);
+      setIsSavingDescription(false);
       return;
     }
+
+    const updatedItem =
+      Array.isArray(result?.data) && result.data.length > 0 ? result.data[0] : null;
 
     if (editingCode.type === "parcel") {
       setParcelItems((prev) =>
         prev.map((row) =>
-          row.id === editingCode.id ? { ...row, item_code: trimmedCode } : row,
+          row.id === editingCode.id
+            ? {
+                ...row,
+                item_code: trimmedCode,
+                item_name: trimmedName,
+                description: cleanedDescription,
+                ...(updatedItem || {}),
+              }
+            : row,
         ),
       );
     } else {
       setProductItems((prev) =>
         prev.map((row) =>
-          row.id === editingCode.id ? { ...row, product_code: trimmedCode } : row,
+          row.id === editingCode.id
+            ? {
+                ...row,
+                product_code: trimmedCode,
+                product_name: trimmedName,
+                description: cleanedDescription,
+                ...(updatedItem || {}),
+              }
+            : row,
         ),
       );
     }
 
-    cancelEditingCode();
+    cancelRowEditing();
     setIsSavingCode(false);
+    setIsSavingDescription(false);
+  };
+
+  const saveEditingDescription = async () => {
+    await saveRowEdit();
+  };
+
+  const startEditingCode = (type, item) => {
+    setCodeUpdateError("");
+    setDescriptionUpdateError("");
+    setEditingCode({
+      type,
+      id: item.id,
+      value: type === "parcel" ? item.item_code || "" : item.product_code || "",
+    });
+    setEditingDescriptionId(`${type}-${item.id}`);
+    setEditingDescriptionValue((item.description || "").toString());
+    setEditingNameValue(type === "parcel" ? item.name || "" : item.product_name || "");
+  };
+
+  const cancelEditingDescription = cancelRowEditing;
+
+  const cancelEditingCode = cancelRowEditing;
+
+  const saveEditingCode = async () => {
+    await saveRowEdit();
   };
 
   // Import states
@@ -1785,7 +1825,7 @@ export default function Page() {
                         ].map((head) => (
                           <th
                             key={head}
-                            className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider"
+                            className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider ${COLUMN_WIDTHS[head] || ""}`}
                           >
                             {head}
                           </th>
@@ -1826,6 +1866,19 @@ export default function Page() {
                                 <div className="flex flex-col gap-2">
                                   <input
                                     type="text"
+                                    maxLength={NAME_MAX_LENGTH}
+                                    value={editingNameValue}
+                                    onChange={(e) => setEditingNameValue(e.target.value)}
+                                    className={`w-full rounded-lg border px-3 py-2 text-sm transition-all ${
+                                      darkMode
+                                        ? "bg-[#111827] border-[#374151] text-white"
+                                        : "bg-white border-[#D1D5DB] text-black"
+                                    }`}
+                                    placeholder="Enter item name"
+                                  />
+                                  <input
+                                    type="text"
+                                    maxLength={CODE_MAX_LENGTH}
                                     value={editingCode.value}
                                     onChange={(e) =>
                                       setEditingCode((prev) => ({
@@ -1893,65 +1946,126 @@ export default function Page() {
                             <td className="px-4 py-3 text-sm">
                               {buildSku(item)}
                             </td>
-                            <td className="px-4 py-3 text-sm min-w-[22rem] w-[28rem] align-top">
-                              {(() => {
-                                const raw = buildDescription(item);
-                                if (!raw) return "-";
-
-                                const expanded = expandedDescriptionIds.has(
-                                  `parcel-${item.id}`,
-                                );
-                                if (expanded) {
-                                  return (
+                            <td className="px-4 py-3 text-sm w-[28%] min-w-0 align-top">
+                              {editingDescriptionId === `parcel-${item.id}` ? (
+                                <div className="flex flex-col gap-2">
+                                  <textarea
+                                    value={editingDescriptionValue}
+                                    maxLength={DESCRIPTION_TRUNCATE_LIMIT}
+                                    onChange={(e) =>
+                                      setEditingDescriptionValue(e.target.value)
+                                    }
+                                    rows={3}
+                                    className={`w-full rounded-lg p-2 text-xs sm:text-sm border ${
+                                      darkMode
+                                        ? "bg-[#111827] border-[#374151] text-white"
+                                        : "bg-white border-[#E5E7EB] text-black"
+                                    }`}
+                                    placeholder="Type a description..."
+                                  />
+                                  <div className="flex items-center gap-2">
                                     <button
                                       type="button"
-                                      onClick={() =>
-                                        toggleDescriptionExpanded(`parcel-${item.id}`)
-                                      }
-                                      className={`text-left whitespace-pre-wrap break-words ${
-                                        darkMode
-                                          ? "text-gray-200 hover:text-white"
-                                          : "text-gray-800 hover:text-black"
+                                      disabled={isSavingDescription}
+                                      onClick={saveEditingDescription}
+                                      className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold ${
+                                        isSavingDescription
+                                          ? darkMode
+                                            ? "bg-[#374151] text-[#9CA3AF] cursor-not-allowed"
+                                            : "bg-[#E5E7EB] text-[#6B7280] cursor-not-allowed"
+                                          : "bg-[#16A34A] text-white hover:bg-[#15803D]"
                                       }`}
-                                      title="Click to collapse"
                                     >
-                                      {raw}
+                                      <Check className="w-4 h-4" /> Save
                                     </button>
-                                  );
-                                }
-
-                                const truncated = truncateText(
-                                  raw,
-                                  DESCRIPTION_TRUNCATE_LIMIT,
-                                );
-                                return (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      toggleDescriptionExpanded(`parcel-${item.id}`)
+                                    <button
+                                      type="button"
+                                      disabled={isSavingDescription}
+                                      onClick={cancelEditingDescription}
+                                      className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold ${
+                                        darkMode
+                                          ? "bg-[#374151] text-[#D1D5DB] hover:bg-[#4B5563]"
+                                          : "bg-[#F3F4F6] text-[#374151] hover:bg-[#E5E7EB]"
+                                      }`}
+                                    >
+                                      <X className="w-4 h-4" /> Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex items-start gap-2 min-w-0">
+                                  {(() => {
+                                    const raw = buildDescription(item);
+                                    if (!raw) {
+                                      return (
+                                        <span
+                                          className={
+                                            darkMode
+                                              ? "text-gray-500"
+                                              : "text-gray-400"
+                                          }
+                                        >
+                                          No description
+                                        </span>
+                                      );
                                     }
-                                    className={`text-left break-words ${
-                                      darkMode
-                                        ? "text-gray-200 hover:text-white"
-                                        : "text-gray-800 hover:text-black"
-                                    }`}
-                                    title="Click to expand"
-                                  >
-                                    {truncated.text}
-                                    {truncated.isTruncated ? (
-                                      <span
-                                        className={`ml-2 text-[11px] font-semibold ${
+
+                                    const expanded = expandedDescriptionIds.has(
+                                      `parcel-${item.id}`,
+                                    );
+                                    if (expanded) {
+                                      return (
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            toggleDescriptionExpanded(`parcel-${item.id}`)
+                                          }
+                                          className={`text-left whitespace-pre-wrap break-words ${
+                                            darkMode
+                                              ? "text-gray-200 hover:text-white"
+                                              : "text-gray-800 hover:text-black"
+                                          }`}
+                                          title="Click to collapse"
+                                        >
+                                          {raw}
+                                        </button>
+                                      );
+                                    }
+
+                                    const truncated = truncateText(
+                                      raw,
+                                      DESCRIPTION_TRUNCATE_LIMIT,
+                                    );
+                                    return (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          toggleDescriptionExpanded(`parcel-${item.id}`)
+                                        }
+                                        className={`flex-1 min-w-0 truncate overflow-hidden whitespace-nowrap text-left ${
                                           darkMode
-                                            ? "text-blue-300"
-                                            : "text-blue-600"
+                                            ? "text-gray-200 hover:text-white"
+                                            : "text-gray-800 hover:text-black"
                                         }`}
+                                        title="Click to expand"
                                       >
-                                        View more
-                                      </span>
-                                    ) : null}
-                                  </button>
-                                );
-                              })()}
+                                        {truncated.text}
+                                        {truncated.isTruncated ? (
+                                          <span
+                                            className={`ml-2 text-[11px] font-semibold ${
+                                              darkMode
+                                                ? "text-blue-300"
+                                                : "text-blue-600"
+                                            }`}
+                                          >
+                                            ...
+                                          </span>
+                                        ) : null}
+                                      </button>
+                                    );
+                                  })()}
+                                </div>
+                              )}
                             </td>
                             <td className="px-4 py-3 text-sm">
                               {isAdmin ? (
@@ -2033,8 +2147,8 @@ export default function Page() {
                                     <Search className="w-4 h-4" />
                                   </button>
                                 ) : null}
-                                {isAdmin ? (
-                                  <>
+                                <>
+                                  {canEdit ? (
                                     <button
                                       type="button"
                                       onClick={() => openThresholdModal("parcel", item)}
@@ -2048,6 +2162,8 @@ export default function Page() {
                                     >
                                       <BarChart3 className="w-4 h-4" />
                                     </button>
+                                  ) : null}
+                                  {canEdit ? (
                                     <button
                                       type="button"
                                       onClick={() => startEditingCode("parcel", item)}
@@ -2061,8 +2177,8 @@ export default function Page() {
                                     >
                                       <PencilLine className="w-4 h-4" />
                                     </button>
-                                  </>
-                                ) : null}
+                                  ) : null}
+                                </>
                                 {item.quantity === 0 ? (
                                   <Link
                                     href={`/view/stock-in?item=${encodeURIComponent(item.name)}`}
@@ -2394,7 +2510,7 @@ export default function Page() {
                         ].map((head) => (
                           <th
                             key={head}
-                            className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider"
+                            className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider ${COLUMN_WIDTHS[head] || ""}`}
                           >
                             {head}
                           </th>
@@ -2435,6 +2551,19 @@ export default function Page() {
                                 <div className="flex flex-col gap-2">
                                   <input
                                     type="text"
+                                    maxLength={NAME_MAX_LENGTH}
+                                    value={editingNameValue}
+                                    onChange={(e) => setEditingNameValue(e.target.value)}
+                                    className={`w-full rounded-lg border px-3 py-2 text-sm transition-all ${
+                                      darkMode
+                                        ? "bg-[#111827] border-[#374151] text-white"
+                                        : "bg-white border-[#D1D5DB] text-black"
+                                    }`}
+                                    placeholder="Enter product name"
+                                  />
+                                  <input
+                                    type="text"
+                                    maxLength={CODE_MAX_LENGTH}
                                     value={editingCode.value}
                                     onChange={(e) =>
                                       setEditingCode((prev) => ({
@@ -2502,11 +2631,12 @@ export default function Page() {
                             <td className="px-4 py-3 text-sm">
                               {buildSku(item)}
                             </td>
-                            <td className="px-4 py-3 text-sm min-w-[22rem] w-[28rem] align-top">
-                              {editingDescriptionId === item.id ? (
+                            <td className="px-4 py-3 text-sm w-[28%] min-w-0 align-top">
+                              {editingDescriptionId === `product-${item.id}` ? (
                                 <div className="flex flex-col gap-2">
                                   <textarea
                                     value={editingDescriptionValue}
+                                    maxLength={DESCRIPTION_TRUNCATE_LIMIT}
                                     onChange={(e) =>
                                       setEditingDescriptionValue(e.target.value)
                                     }
@@ -2522,7 +2652,7 @@ export default function Page() {
                                     <button
                                       type="button"
                                       disabled={isSavingDescription}
-                                      onClick={() => saveEditingDescription(item.id)}
+                                      onClick={saveEditingDescription}
                                       className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold ${
                                         isSavingDescription
                                           ? darkMode
@@ -2548,10 +2678,10 @@ export default function Page() {
                                   </div>
                                 </div>
                               ) : (
-                                <div className="flex items-start gap-2">
+                                <div className="flex items-start gap-2 min-w-0">
                                   <button
                                     type="button"
-                                    className={`text-left break-words leading-relaxed ${
+                                    className={`flex-1 min-w-0 truncate overflow-hidden whitespace-nowrap text-left leading-relaxed ${
                                       darkMode
                                         ? "text-gray-200 hover:text-white"
                                         : "text-gray-800 hover:text-black"
@@ -2608,27 +2738,13 @@ export default function Page() {
                                                   : "text-blue-600"
                                               }`}
                                             >
-                                              View more
+                                              ...
                                             </span>
                                           ) : null}
                                         </span>
                                       );
                                     })()}
                                   </button>
-                                  {isAdmin ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => startEditingDescription(item)}
-                                      className={`p-2 rounded-lg border transition ${
-                                        darkMode
-                                          ? "border-[#374151] hover:bg-[#374151]/60"
-                                          : "border-[#E5E7EB] hover:bg-[#F3F4F6]"
-                                      }`}
-                                      title="Edit description"
-                                    >
-                                      <PencilLine className="w-4 h-4" />
-                                    </button>
-                                  ) : null}
                                 </div>
                               )}
                             </td>
@@ -2712,8 +2828,8 @@ export default function Page() {
                                     <Search className="w-4 h-4" />
                                   </button>
                                 ) : null}
-                                {isAdmin ? (
-                                  <>
+                                <>
+                                  {canEdit ? (
                                     <button
                                       type="button"
                                       onClick={() => openThresholdModal("product", item)}
@@ -2727,6 +2843,8 @@ export default function Page() {
                                     >
                                       <BarChart3 className="w-4 h-4" />
                                     </button>
+                                  ) : null}
+                                  {canEdit ? (
                                     <button
                                       type="button"
                                       onClick={() => startEditingCode("product", item)}
@@ -2740,8 +2858,8 @@ export default function Page() {
                                     >
                                       <PencilLine className="w-4 h-4" />
                                     </button>
-                                  </>
-                                ) : null}
+                                  ) : null}
+                                </>
                                 {item.quantity === 0 ? (
                                   <Link
                                     href={`/view/product-in?product=${encodeURIComponent(item.product_name)}`}

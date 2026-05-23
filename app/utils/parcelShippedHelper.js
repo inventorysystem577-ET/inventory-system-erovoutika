@@ -37,6 +37,7 @@ export const fetchParcelItems = async () => {
         price: item.price,
         category: displayCategory,
         item_code: item.item_code,
+        description: item.description || "",
       };
     });
   } catch (err) {
@@ -56,6 +57,7 @@ export const addParcelItem = async ({
   price,
   category,
   item_code,
+  description,
 }) => {
   try {
     // Use category directly since we're now using the correct format
@@ -74,6 +76,7 @@ export const addParcelItem = async ({
           : Number(price),
       category: dbCategory, // Use mapped category for database
       item_code: item_code || null,
+      description: description || null,
     });
     return {
       id: res.data.id,
@@ -86,6 +89,7 @@ export const addParcelItem = async ({
       price: res.data.price,
       category: category, // Keep original category for display
       item_code: res.data.item_code,
+      description: res.data.description || "",
     };
   } catch (err) {
     console.error(err.response?.data || err.message);
@@ -145,6 +149,7 @@ export const updateParcelInItemHelper = async (id, updates = {}) => {
       price: data.price,
       category: data.category,
       item_code: data.item_code,
+      description: data.description || "",
     };
   } catch (err) {
     console.error(

@@ -4,3 +4,6 @@ ADD COLUMN IF NOT EXISTS description text;
 
 ALTER TABLE IF EXISTS public.products_out
 ADD COLUMN IF NOT EXISTS description text;
+
+ALTER TABLE IF EXISTS public.parcel_in
+ADD COLUMN IF NOT EXISTS description text;

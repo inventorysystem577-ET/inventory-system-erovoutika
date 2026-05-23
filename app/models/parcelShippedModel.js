@@ -13,6 +13,7 @@ export const addParcelInItem = async (item) => {
       : Number(item.price),
     category: item.category || 'Others',
     item_code: item.item_code || null,
+    description: item.description || null,
   };
 
   let lastError;
@@ -98,6 +99,7 @@ export const restoreParcelInItems = async (rows = []) => {
         ? null
         : Number(row.price),
     item_code: row.item_code || null,
+    description: row.description || null,
   }));
 
   let lastError;
