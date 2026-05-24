@@ -140,21 +140,42 @@ function PageContent() {
     }
   }, [name, quantity, itemCode, showMultipleInput]);
 
+  const normalizeName = (value = "") =>
+    value.toString().trim().toLowerCase().replace(/\s+/g, " ");
+
+  const getExistingItemCode = (itemName) => {
+    if (!itemName) return "";
+    const matching = items.find(
+      (item) => normalizeName(item.name) === normalizeName(itemName),
+    );
+    if (!matching) return "";
+    return matching.item_code || buildProductCode(matching, "CMP");
+  };
+
   const updateParcelRow = (id, field, value) => {
     setParcelRows(parcelRows.map(row => {
       if (row.id === id) {
         const updatedRow = { ...row, [field]: value };
-        
-        // Reset quantity to 1 when item changes
+
+        // Reset quantity and auto-fill code when item changes
         if (field === 'name') {
           updatedRow.quantity = 1;
+          updatedRow.itemCode = getExistingItemCode(value);
         }
-        
+
         return updatedRow;
       }
       return row;
     }));
   };
+
+  useEffect(() => {
+    if (!name?.trim() || itemCode) return;
+    const existingCode = getExistingItemCode(name);
+    if (existingCode) {
+      setItemCode(existingCode);
+    }
+  }, [name, items, itemCode]);
 
   const calculateTotalPrice = () => {
     return parcelRows.reduce((total, row) => {
@@ -172,6 +193,10 @@ function PageContent() {
   const loadItems = async () => {
     const inItems = await fetchParcelItems();
     setItems(inItems);
+    const uniqueNames = Array.from(
+      new Set(inItems.map((item) => item.name).filter(Boolean)),
+    ).sort((a, b) => a.localeCompare(b));
+    setItemSuggestions(uniqueNames);
   };
 
   useEffect(() => {
@@ -409,6 +434,7 @@ function PageContent() {
                   </label>
                   <input
                     type="text"
+                    list="stock-in-suggestions"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="Item name"
@@ -419,6 +445,11 @@ function PageContent() {
                     )}
                     required
                   />
+                  <datalist id="stock-in-suggestions">
+                    {itemSuggestions.map((suggestion) => (
+                      <option key={suggestion} value={suggestion} />
+                    ))}
+                  </datalist>
                 </div>
 
                 {/* Item Code */}
@@ -704,6 +735,7 @@ function PageContent() {
                       onChange={updateRow}
                       onRemove={removeRow}
                       darkMode={darkMode}
+                      itemSuggestions={itemSuggestions}
                     />
                   ))}
                 </div>

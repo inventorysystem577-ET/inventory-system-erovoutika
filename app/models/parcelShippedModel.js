@@ -1,5 +1,35 @@
 import { supabase } from "../../lib/supabaseClient";
 
+const normalizeItemName = (value = "") => value.toString().trim();
+
+const findExistingParcelInItem = async (payload) => {
+  const itemName = normalizeItemName(payload.item_name);
+  if (!itemName) return { data: [], error: null };
+
+  let query = supabase.from("parcel_in").select("*").limit(1);
+
+  if (payload.item_code) {
+    const { data, error } = await query.eq("item_code", payload.item_code);
+    if (error) {
+      if (error.message?.includes("item_code") || error.code === "42703") {
+        // item_code column may not exist, ignore and fall back to name search
+      } else {
+        return { data: [], error };
+      }
+    } else if (data?.length) {
+      return { data, error: null };
+    }
+  }
+
+  const { data, error } = await supabase
+    .from("parcel_in")
+    .select("*")
+    .ilike("item_name", itemName)
+    .limit(1);
+
+  return { data, error };
+};
+
 export const addParcelInItem = async (item) => {
   let payload = {
     item_name: item.item_name,
@@ -8,13 +38,67 @@ export const addParcelInItem = async (item) => {
     time_in: item.time_in,
     shipping_mode: item.shipping_mode || null,
     client_name: item.client_name || null,
-    price: item.price === "" || item.price === null || item.price === undefined
-      ? null
-      : Number(item.price),
+    price:
+      item.price === "" || item.price === null || item.price === undefined
+        ? null
+        : Number(item.price),
     category: item.category || 'Others',
     item_code: item.item_code || null,
     description: item.description || null,
   };
+
+  const existingResult = await findExistingParcelInItem(payload);
+  if (existingResult.error) {
+    return { error: existingResult.error };
+  }
+
+  const existing = Array.isArray(existingResult.data)
+    ? existingResult.data[0]
+    : existingResult.data;
+
+  if (existing) {
+    const updatedPayload = {
+      item_name: existing.item_name,
+      date: payload.date || existing.date,
+      quantity: Number(existing.quantity || 0) + Number(payload.quantity || 0),
+      time_in: payload.time_in || existing.time_in,
+      shipping_mode: payload.shipping_mode || existing.shipping_mode,
+      client_name: payload.client_name || existing.client_name,
+      price:
+        (Number(existing.price || 0) + Number(payload.price || 0)) || null,
+      category: payload.category || existing.category || 'Others',
+      item_code: existing.item_code || payload.item_code || null,
+      description: payload.description || existing.description || null,
+    };
+
+    let updateError;
+    let updatePayload = { ...updatedPayload };
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const { data, error } = await supabase
+        .from("parcel_in")
+        .update(updatePayload)
+        .eq("id", existing.id)
+        .select();
+
+      if (!error) return { data };
+      updateError = error;
+
+      if (error.message?.includes("item_code") || error.code === "42703") {
+        const { item_code, ...payloadWithoutCode } = updatePayload;
+        updatePayload = payloadWithoutCode;
+        console.warn("item_code column not found, retrying update without it");
+        continue;
+      }
+
+      break;
+    }
+
+    if (updateError) {
+      return { error: updateError };
+    }
+
+    return { data: null };
+  }
 
   let lastError;
   for (let attempt = 0; attempt < 2; attempt++) {

@@ -68,6 +68,7 @@ export default function ProductInPage() {
       description: "",
       price: 0,
       category: PRODUCT_CATEGORIES.OTHER,
+      productCode: "",
       components: [],
       customComponents: [{ name: "", quantity: "", unit_price: "" }],
     };
@@ -96,6 +97,17 @@ export default function ProductInPage() {
   const [timeHour, setTimeHour] = useState("1");
   const [timeMinute, setTimeMinute] = useState("00");
   const [timeAMPM, setTimeAMPM] = useState("AM");
+  const [totalPrice, setTotalPrice] = useState(0);
+  const [currentStock, setCurrentStock] = useState(0);
+
+  const getExistingProductCode = (productName) => {
+    if (!productName) return "";
+    const matching = items.find(
+      (item) => normalizeName(item.product_name) === normalizeName(productName),
+    );
+    if (!matching) return "";
+    return matching.product_code || buildProductCode(matching);
+  };
 
   useEffect(() => {
     if (productParam) {
@@ -123,8 +135,14 @@ export default function ProductInPage() {
     setTotalPrice(price * quantity);
   }, [qty, price]);
 
-  const [totalPrice, setTotalPrice] = useState(0);
-  const [currentStock, setCurrentStock] = useState(0);
+  useEffect(() => {
+    if (!selectedProduct?.trim() || productCode) return;
+    const existingCode = getExistingProductCode(selectedProduct);
+    if (existingCode) {
+      setProductCode(existingCode);
+    }
+  }, [selectedProduct, items, productCode]);
+
   const [errorBar, setErrorBar] = useState("");
   const [successBar, setSuccessBar] = useState("");
   const [alternativeRequest, setAlternativeRequest] = useState(null);
@@ -238,30 +256,39 @@ export default function ProductInPage() {
   }, [productParam, authInitialized]);
 
   const loadItems = async () => {
-    const data = await fetchProductInController();
-    const sanitizedData = data
-      .map((item) => ({
-        ...item,
-        quantity: Number(item.quantity || 0),
-        components: Array.isArray(item.components) ? item.components : [],
-      }))
-      .filter((item) => item.quantity > 0);
-    setItems(
-      sanitizedData.sort((a, b) =>
-        (a.product_name || "").localeCompare(b.product_name || ""),
-      ),
-    );
+    try {
+      const data = await fetchProductInController();
+      const sanitizedData = Array.isArray(data)
+        ? data
+            .map((item) => ({
+              ...item,
+              quantity: Number(item.quantity || 0),
+              components: Array.isArray(item.components) ? item.components : [],
+            }))
+            .filter((item) => item.quantity > 0)
+        : [];
 
-    const existingNames = sanitizedData
-      .map((item) => item.product_name)
-      .filter(Boolean);
-    const predefinedNames = products
-      .map((product) => product.name)
-      .filter(Boolean);
-    const unique = Array.from(
-      new Set([...predefinedNames, ...existingNames]),
-    ).sort();
-    setProductSuggestions(unique);
+      setItems(
+        sanitizedData.sort((a, b) =>
+          (a.product_name || "").localeCompare(b.product_name || ""),
+        ),
+      );
+
+      const existingNames = sanitizedData
+        .map((item) => item.product_name)
+        .filter(Boolean);
+      const predefinedNames = products
+        .map((product) => product.name)
+        .filter(Boolean);
+      const unique = Array.from(
+        new Set([...predefinedNames, ...existingNames]),
+      ).sort();
+      setProductSuggestions(unique);
+    } catch (error) {
+      console.error("loadItems error:", error);
+      setItems([]);
+      setProductSuggestions(products.map((product) => product.name).filter(Boolean));
+    }
   };
 
   const DESCRIPTION_TRUNCATE_LIMIT = 120;
@@ -331,8 +358,13 @@ export default function ProductInPage() {
   };
 
   const loadStockInItems = async () => {
-    const data = await fetchParcelItems();
-    setStockInItems(Array.isArray(data) ? data : []);
+    try {
+      const data = await fetchParcelItems();
+      setStockInItems(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("loadStockInItems error:", error);
+      setStockInItems([]);
+    }
   };
 
   useEffect(() => {

@@ -4,6 +4,7 @@ import {
   PRODUCT_CATEGORIES,
   PRODUCT_CATEGORY_OPTIONS,
 } from "../utils/categoryUtils";
+import { buildProductCode } from "../utils/inventoryMeta";
 
 const getToday = () => {
   const now = new Date();
@@ -39,6 +40,7 @@ const MultipleProductInput = ({
       description: "",
       price: 0,
       category: PRODUCT_CATEGORIES.OTHER,
+      productCode: "",
       components: [],
       customComponents: [{ name: "", quantity: "", unit_price: "" }]
     }]);
@@ -52,30 +54,25 @@ const MultipleProductInput = ({
   const updateProductField = (index, field, value) => {
     const newProducts = [...products];
     newProducts[index] = { ...newProducts[index], [field]: value };
-    
-    // Auto-populate price and description based on existing items
-    if (field === "product_name" && value) {
+
+    // Auto-populate price, description, category, and code based on existing items
+    if (field === "product_name") {
       const existingItem = items.find(
-        (item) => normalizeName(item.product_name) === normalizeName(value)
+        (item) => normalizeName(item.product_name) === normalizeName(value),
       );
-      
+
       if (existingItem) {
         newProducts[index].price = existingItem.price || 0;
         newProducts[index].description = existingItem.description || "";
         newProducts[index].category =
           existingItem.category || PRODUCT_CATEGORIES.OTHER;
+        newProducts[index].productCode =
+          existingItem.product_code || buildProductCode(existingItem);
+      } else {
+        newProducts[index].productCode = "";
       }
     }
-    
-    setProducts(newProducts);
-  };
 
-  const updateCustomComponent = (productIndex, compIndex, field, value) => {
-    const newProducts = [...products];
-    newProducts[productIndex].customComponents[compIndex] = {
-      ...newProducts[productIndex].customComponents[compIndex],
-      [field]: value
-    };
     setProducts(newProducts);
   };
 

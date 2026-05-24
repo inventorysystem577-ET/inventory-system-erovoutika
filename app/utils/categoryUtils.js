@@ -98,10 +98,10 @@ export const deleteCustomProductCategory = (name) => {
 export const getAllStockCategories = () => {
   const custom = getCustomStockCategories();
   return [
-    { value: CATEGORIES.COMPONENT, label: "Component (electronic components)" },
-    { value: CATEGORIES.PRODUCT, label: "Product (finished products)" },
-    { value: CATEGORIES.TOOL, label: "Tool (equipment and tools)" },
-    { value: CATEGORIES.OTHERS, label: "Others (miscellaneous items)" },
+    { value: CATEGORIES.COMPONENT, label: "Component" },
+    { value: CATEGORIES.PRODUCT, label: "Product" },
+    { value: CATEGORIES.TOOL, label: "Equipment" },
+    { value: CATEGORIES.OTHERS, label: "Others" },
     ...custom,
   ];
 };

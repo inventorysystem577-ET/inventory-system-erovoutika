@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
 
@@ -30,6 +30,7 @@ export const useAuth = () => {
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
   const router = useRouter();
+  const hasInitializedRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
@@ -58,10 +59,7 @@ export const useAuth = () => {
         setStatus(null);
         setLoading(false);
         setInitialized(true);
-        // Clear any remaining auth data
-        localStorage.removeItem('supabase.auth.token');
-        localStorage.removeItem('supabase.auth.refreshToken');
-        sessionStorage.clear();
+        hasInitializedRef.current = true;
         // Only redirect to login when the user is currently on a protected route.
         if (typeof window !== 'undefined') {
           const publicPaths = ['/', '/view/login', '/view/register', '/view/forgot-password'];
@@ -91,37 +89,8 @@ export const useAuth = () => {
       setStatus(isMetadataAdmin || isEffectiveAdmin ? "approved" : normalizeStatus(profile?.status || metadataStatus, "pending"));
       setLoading(false);
       setInitialized(true);
+      hasInitializedRef.current = true;
     };
-
-    const checkAuth = async () => {
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        await applySession(session);
-      } catch (error) {
-        console.error("Error checking session:", error.message);
-        // Handle refresh token errors specifically
-        if (error.message?.includes('Refresh Token Not Found') || 
-            error.message?.includes('Invalid Refresh Token')) {
-          // Clear all auth data and redirect to login
-          await supabase.auth.signOut();
-          localStorage.clear();
-          sessionStorage.clear();
-        }
-        await applySession(null);
-      }
-    };
-
-    checkAuth();
-
-    const handleWindowFocus = () => {
-      if (!mounted) return;
-      // Re-check auth whenever the tab regains focus after idle / page changes.
-      checkAuth();
-    };
-
-    window.addEventListener("focus", handleWindowFocus);
 
     const {
       data: { subscription },
@@ -130,20 +99,33 @@ export const useAuth = () => {
         await applySession(session);
       } catch (error) {
         console.error("Error in auth state change:", error.message);
-        if (error.message?.includes('Refresh Token Not Found') || 
-            error.message?.includes('Invalid Refresh Token')) {
-          await supabase.auth.signOut();
-          localStorage.clear();
-          sessionStorage.clear();
-        }
         await applySession(null);
       }
     });
 
+    // Handle tab visibility change to recover from idle state
+    const handleVisibilityChange = async () => {
+      if (!mounted || !hasInitializedRef.current) return;
+      if (document.visibilityState !== 'visible') return;
+      
+      // Reset loading state to show spinner while checking session
+      setLoading(true);
+      
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        await applySession(session);
+      } catch (error) {
+        console.error("Error checking session on visibility change:", error.message);
+        await applySession(null);
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
       mounted = false;
-      window.removeEventListener("focus", handleWindowFocus);
       subscription.unsubscribe();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [router]);
 

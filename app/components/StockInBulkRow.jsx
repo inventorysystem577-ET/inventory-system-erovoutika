@@ -4,7 +4,7 @@ import { CATEGORIES, CATEGORY_OPTIONS } from "../utils/categoryUtils";
 import StockTimePicker from "./StockTimePicker";
 import StockCategorySelect from "./StockCategorySelect";
 
-export default function StockInBulkRow({ row, index, onChange, onRemove, darkMode }) {
+export default function StockInBulkRow({ row, index, onChange, onRemove, darkMode, itemSuggestions = [] }) {
   const inputClass = `border rounded-lg px-3 py-2.5 w-full focus:outline-none focus:ring-2 transition-all ${
     darkMode
       ? "border-[#374151] focus:ring-[#3B82F6] focus:border-[#3B82F6] bg-[#111827] text-white"
@@ -41,12 +41,18 @@ export default function StockInBulkRow({ row, index, onChange, onRemove, darkMod
           </label>
           <input
             type="text"
+            list={`stock-in-suggestions-${index}`}
             value={row.name}
             onChange={(e) => onChange(index, "name", e.target.value)}
             placeholder="Item name"
             className={inputClass}
             required
           />
+          <datalist id={`stock-in-suggestions-${index}`}>
+            {itemSuggestions.map((suggestion) => (
+              <option key={suggestion} value={suggestion} />
+            ))}
+          </datalist>
         </div>
 
         <div>

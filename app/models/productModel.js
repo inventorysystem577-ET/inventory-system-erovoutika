@@ -43,6 +43,39 @@ const formatSupabaseError = (
   return [code, message, details, hint].filter(Boolean).join(" | ") || fallback;
 };
 
+const findExistingProductIn = async (payload) => {
+  const productName = payload.product_name?.toString().trim();
+  const productCode = payload.product_code?.toString().trim();
+
+  if (productCode) {
+    const { data, error } = await supabase
+      .from("product_in")
+      .select("*")
+      .eq("product_code", productCode)
+      .limit(1);
+
+    if (error) {
+      if (!isMissingColumnError(error, "product_code")) {
+        return { data: [], error };
+      }
+    } else if (data?.length) {
+      return { data, error: null };
+    }
+  }
+
+  if (!productName) {
+    return { data: [], error: null };
+  }
+
+  const { data, error } = await supabase
+    .from("product_in")
+    .select("*")
+    .ilike("product_name", productName)
+    .limit(1);
+
+  return { data, error };
+};
+
 const parseComponentCandidates = (componentName) => {
   const raw = (componentName || "")
     .split(/\s+or\s+/i)
@@ -481,6 +514,86 @@ export const upsertProductIn = async (data) => {
         : Number(data.price),
     product_code: data.product_code || null,
   };
+
+  const existingResult = await findExistingProductIn(payload);
+  if (existingResult.error) {
+    console.error("upsertProductIn lookup error:", existingResult.error);
+    return {
+      __error: formatSupabaseError(existingResult.error, "Error finding existing product"),
+    };
+  }
+
+  const existing = Array.isArray(existingResult.data)
+    ? existingResult.data[0]
+    : existingResult.data;
+
+  if (existing) {
+    const updatePayload = {
+      quantity: Number(existing.quantity || 0) + Number(payload.quantity || 0),
+      date: payload.date || existing.date,
+      time_in: payload.time_in || existing.time_in,
+      components: payload.components || existing.components,
+      shipping_mode: payload.shipping_mode || existing.shipping_mode,
+      client_name: payload.client_name || existing.client_name,
+      description: payload.description || existing.description || null,
+      category: payload.category || existing.category || "Others",
+      price:
+        (Number(existing.price || 0) + Number(payload.price || 0)) || null,
+      product_code: existing.product_code || payload.product_code || null,
+    };
+
+    let updateError = null;
+    let currentPayload = { ...updatePayload };
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const { data: updatedData, error: updateErr } = await supabase
+        .from("product_in")
+        .update(currentPayload)
+        .eq("id", existing.id)
+        .select();
+
+      if (!updateErr) {
+        return updatedData?.[0] || null;
+      }
+
+      updateError = updateErr;
+
+      if (
+        isMissingColumnError(updateErr, "category") &&
+        "category" in currentPayload
+      ) {
+        const { category, ...nextPayload } = currentPayload;
+        currentPayload = nextPayload;
+        continue;
+      }
+
+      if (
+        isMissingColumnError(updateErr, "description") &&
+        "description" in currentPayload
+      ) {
+        const { description, ...nextPayload } = currentPayload;
+        currentPayload = nextPayload;
+        continue;
+      }
+
+      if (
+        isMissingColumnError(updateErr, "product_code") &&
+        "product_code" in currentPayload
+      ) {
+        const { product_code, ...nextPayload } = currentPayload;
+        currentPayload = nextPayload;
+        continue;
+      }
+
+      break;
+    }
+
+    if (updateError) {
+      console.error("upsertProductIn update error:", updateError);
+      return {
+        __error: formatSupabaseError(updateError, "Error updating existing product"),
+      };
+    }
+  }
 
   let lastError = null;
   for (let attempt = 0; attempt < 3; attempt += 1) {
