@@ -60,7 +60,7 @@ export default function ProductOutPage() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(5);
-  const { role, displayName, userEmail } = useAuth();
+  const { role, displayName, userEmail, initialized: authInitialized } = useAuth();
   const isAdmin = isAdminRole(role);
 
   const DESCRIPTION_TRUNCATE_LIMIT = 120;
@@ -105,9 +105,10 @@ export default function ProductOutPage() {
     const today = new Date().toISOString().split("T")[0];
     setDate(today);
 
+    if (!authInitialized) return;
     loadItems();
     loadAvailableProducts();
-  }, []);
+  }, [authInitialized]);
 
   const loadItems = async () => {
     const data = await fetchProductOutController();

@@ -159,10 +159,11 @@ export default function Page() {
   const [productSortOrder, setProductSortOrder] = useState("default");
   const [parcelCurrentPage, setParcelCurrentPage] = useState(1);
   const [productCurrentPage, setProductCurrentPage] = useState(1);
-  const { role, displayName, userEmail } = useAuth();
+  const { role, displayName, userEmail, loading: authLoading, initialized: authInitialized } = useAuth();
   const isAdmin = isAdminRole(role);
   const canEdit = isAdmin || isStaffRole(role);
   const canViewHistory = canEdit;
+
   const [isUpdatingCategoryId, setIsUpdatingCategoryId] = useState(null);
   const [categoryTransferError, setCategoryTransferError] = useState("");
   const [descriptionUpdateError, setDescriptionUpdateError] = useState("");
@@ -578,9 +579,13 @@ export default function Page() {
   useEffect(() => {
     const savedDarkMode = localStorage.getItem("darkMode");
     if (savedDarkMode !== null) setDarkMode(savedDarkMode === "true");
+  }, []);
+
+  useEffect(() => {
+    if (!authInitialized) return;
     loadItems();
     loadDefectiveItems();
-  }, []);
+  }, [authInitialized]);
 
   useEffect(() => {
     try {

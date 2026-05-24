@@ -28,6 +28,7 @@ export const useAuth = () => {
   const [role, setRole] = useState(null);
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [initialized, setInitialized] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -56,6 +57,7 @@ export const useAuth = () => {
         setRole(null);
         setStatus(null);
         setLoading(false);
+        setInitialized(true);
         // Clear any remaining auth data
         localStorage.removeItem('supabase.auth.token');
         localStorage.removeItem('supabase.auth.refreshToken');
@@ -88,6 +90,7 @@ export const useAuth = () => {
       setRole(effectiveRole);
       setStatus(isMetadataAdmin || isEffectiveAdmin ? "approved" : normalizeStatus(profile?.status || metadataStatus, "pending"));
       setLoading(false);
+      setInitialized(true);
     };
 
     const checkAuth = async () => {
@@ -112,6 +115,14 @@ export const useAuth = () => {
 
     checkAuth();
 
+    const handleWindowFocus = () => {
+      if (!mounted) return;
+      // Re-check auth whenever the tab regains focus after idle / page changes.
+      checkAuth();
+    };
+
+    window.addEventListener("focus", handleWindowFocus);
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
@@ -131,9 +142,10 @@ export const useAuth = () => {
 
     return () => {
       mounted = false;
+      window.removeEventListener("focus", handleWindowFocus);
       subscription.unsubscribe();
     };
   }, [router]);
 
-  return { userEmail, displayName, role, status, loading };
+  return { userEmail, displayName, role, status, loading, initialized };
 };

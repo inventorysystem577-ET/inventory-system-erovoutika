@@ -25,14 +25,18 @@ const ADMIN_ONLY_PATHS = [
 
 /* ================= AUTH GUARD ================= */
 export default function AuthGuard({ children, darkMode = false }) {
-  const { loading: authLoading, userEmail, role, status } = useAuth();
+  const { loading: authLoading, userEmail, role, status, initialized } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
   const isAdmin = isAdminRole(role);
   const isApproved = status === "approved";
 
   useEffect(() => {
-    if (authLoading || !userEmail) return;
+    if (!initialized || authLoading) return;
+    if (!userEmail) {
+      router.replace("/");
+      return;
+    }
     if (!isApproved) {
       router.replace("/");
       return;
@@ -47,9 +51,9 @@ export default function AuthGuard({ children, darkMode = false }) {
     if (!STAFF_ALLOWED_PATHS.includes(pathname)) {
       router.replace("/view/dashboard");
     }
-  }, [authLoading, userEmail, isAdmin, isApproved, pathname, router]);
+  }, [initialized, authLoading, userEmail, isAdmin, isApproved, pathname, router]);
 
-  if (authLoading) {
+  if (!initialized || authLoading) {
     return (
       <div
         className={`min-h-screen flex items-center justify-center ${

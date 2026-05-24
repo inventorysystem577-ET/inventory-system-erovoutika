@@ -105,7 +105,7 @@ export default function page() {
   const [inventorySearch, setInventorySearch] = useState("");
 
   const router = useRouter();
-  const { role } = useAuth();
+  const { role, loading: authLoading, initialized: authInitialized } = useAuth();
   const isAdmin = isAdminRole(role);
 
   const convertTo12Hour = (time24) => {
@@ -223,6 +223,8 @@ export default function page() {
     const savedDarkMode = localStorage.getItem("darkMode");
     if (savedDarkMode !== null) setDarkMode(savedDarkMode === "true");
 
+    if (!authInitialized) return;
+
     const fetchData = async () => {
       const shippedRes = await fetchParcelItems();
       const deliveryRes = await fetchParcelOutItems();
@@ -251,7 +253,7 @@ export default function page() {
     };
 
     fetchData();
-  }, []);
+  }, [authInitialized]);
 
   useEffect(() => {
     setStatusCounts(computeStatusCounts(stockItems, "parcel"));

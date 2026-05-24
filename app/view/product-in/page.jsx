@@ -160,7 +160,7 @@ export default function ProductInPage() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(5);
-  const { role, displayName, userEmail } = useAuth();
+  const { role, displayName, userEmail, initialized: authInitialized } = useAuth();
   const isAdmin = isAdminRole(role);
 
   const normalizeName = (value = "") =>
@@ -232,9 +232,10 @@ export default function ProductInPage() {
       setTimeAMPM(ampm);
     }
 
+    if (!authInitialized) return;
     loadItems();
     loadStockInItems();
-  }, [productParam]);
+  }, [productParam, authInitialized]);
 
   const loadItems = async () => {
     const data = await fetchProductInController();

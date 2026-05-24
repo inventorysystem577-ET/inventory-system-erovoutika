@@ -26,7 +26,7 @@ export default function Page() {
   const [items, setItems] = useState([]);
   const [availableItems, setAvailableItems] = useState([]);
   const [date, setDate] = useState("");
-  const { role, displayName, userEmail } = useAuth();
+  const { role, displayName, userEmail, initialized: authInitialized } = useAuth();
   
   // Single item selection state
   const [selectedItemId, setSelectedItemId] = useState("");
@@ -199,8 +199,10 @@ export default function Page() {
     setTimeHour(hour.toString());
     setTimeMinute(formattedMinute);
     setTimeAMPM(ampm);
+    
+    if (!authInitialized) return;
     loadStockOutData();
-  }, []);
+  }, [authInitialized]);
 
   const formatTo12Hour = (time) => {
     if (!time) return "";

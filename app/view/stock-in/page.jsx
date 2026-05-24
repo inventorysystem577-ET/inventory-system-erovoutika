@@ -80,7 +80,7 @@ function PageContent() {
   const [showMultipleInput, setShowMultipleInput] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(5);
-  const { role, displayName, userEmail } = useAuth();
+  const { role, displayName, userEmail, initialized: authInitialized } = useAuth();
   const isAdmin = isAdminRole(role);
 
   const {
@@ -192,8 +192,9 @@ function PageContent() {
       setTimeMinute(formattedMinute);
       setTimeAMPM(ampm);
     }
+    if (!authInitialized) return;
     loadItems();
-  }, [itemParam]);
+  }, [itemParam, authInitialized]);
 
   const formatTo12Hour = (time) => {
     if (!time) return "";
