@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
 
 const APPROVED_USERS_TABLE = "user_profiles";
@@ -29,7 +28,6 @@ export const useAuth = () => {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
-  const router = useRouter();
   const hasInitializedRef = useRef(false);
 
   useEffect(() => {
@@ -60,15 +58,6 @@ export const useAuth = () => {
         setLoading(false);
         setInitialized(true);
         hasInitializedRef.current = true;
-        // Only redirect to login when the user is currently on a protected route.
-        if (typeof window !== 'undefined') {
-          const publicPaths = ['/', '/view/login', '/view/register', '/view/forgot-password'];
-          const path = window.location.pathname || '/';
-          const onPublic = publicPaths.some((p) => path.startsWith(p));
-          if (!onPublic) {
-            router.replace('/');
-          }
-        }
         return;
       }
 
@@ -103,6 +92,33 @@ export const useAuth = () => {
       }
     });
 
+    // Initialize session on mount
+    const initializeSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        await applySession(session);
+      } catch (error) {
+        console.error("Error initializing session:", error.message);
+        try {
+          await applySession(null);
+        } catch (_) {
+          // ignore
+        }
+      }
+    };
+
+    initializeSession();
+
+    // Fallback timeout so UI doesn't stay stuck on loading
+    const fallback = setTimeout(() => {
+      if (!hasInitializedRef.current && mounted) {
+        console.warn("Auth initialization timeout - proceeding unauthenticated");
+        setLoading(false);
+        setInitialized(true);
+        hasInitializedRef.current = true;
+      }
+    }, 5000);
+
     // Handle tab visibility change to recover from idle state
     const handleVisibilityChange = async () => {
       if (!mounted || !hasInitializedRef.current) return;
@@ -125,9 +141,10 @@ export const useAuth = () => {
     return () => {
       mounted = false;
       subscription.unsubscribe();
+      clearTimeout(fallback);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [router]);
+  }, []);
 
   return { userEmail, displayName, role, status, loading, initialized };
 };

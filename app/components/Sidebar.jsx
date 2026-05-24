@@ -35,32 +35,24 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen, darkMode }) {
       icon: ArrowDownToLine,
       path: "/view/product-in",
     },
-    ...(isAdmin
-      ? [
-          {
-            id: "Product Out",
-            label: "Product Out",
-            icon: ArrowUpFromLine,
-            path: "/view/product-out",
-          },
-        ]
-      : []),
+    {
+      id: "Product Out",
+      label: "Product Out",
+      icon: ArrowUpFromLine,
+      path: "/view/product-out",
+    },
     {
       id: "Parcel Shipped",
       label: "Stock In",
       icon: Package,
       path: "/view/stock-in",
     },
-    ...(isAdmin
-      ? [
-          {
-            id: "Parcel Delivery",
-            label: "Stock Out",
-            icon: PackageOpen,
-            path: "/view/stock-out",
-          },
-        ]
-      : []),
+    {
+      id: "Parcel Delivery",
+      label: "Stock Out",
+      icon: PackageOpen,
+      path: "/view/stock-out",
+    },
     {
       id: "Item Transfer",
       label: "Item Transfer",
