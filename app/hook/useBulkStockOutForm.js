@@ -20,6 +20,7 @@ const buildDefaultRow = () => {
     timeAMPM: ampm,
     shipping_mode: "",
     client_name: "",
+    description: "",
     price: "",
     category: CATEGORIES.OTHERS,
   };
@@ -71,6 +72,7 @@ export default function useBulkStockOutForm({ onSuccess, actor, availableItems }
       }
 
       if (!row.category) return `Row ${i + 1}: Category is required.`;
+      if (!row.client_name?.trim()) return `Row ${i + 1}: Client Name is required.`;
 
       const available = Number(stockByName[row.item_name] || 0);
       if (available <= 0) {
@@ -116,6 +118,7 @@ export default function useBulkStockOutForm({ onSuccess, actor, availableItems }
         timeAMPM: row.timeAMPM,
         shipping_mode: row.shipping_mode,
         client_name: row.client_name,
+        description: row.description,
         price: computedTotalPrice,
         category: row.category || CATEGORIES.OTHERS,
       });

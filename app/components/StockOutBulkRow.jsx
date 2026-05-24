@@ -149,6 +149,17 @@ export default function StockOutBulkRow({
             onChange={(e) => onChange(index, "client_name", e.target.value)}
             placeholder="Client name"
             className={inputClass}
+            required
+          />
+        </div>
+
+        <div>
+          <label className={labelClass}>Remarks</label>
+          <textarea
+            value={row.description}
+            onChange={(e) => onChange(index, "description", e.target.value)}
+            placeholder="Enter remarks"
+            className={`${inputClass} min-h-[90px] resize-none`}
           />
         </div>
 

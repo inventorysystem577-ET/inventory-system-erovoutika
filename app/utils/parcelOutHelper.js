@@ -16,6 +16,7 @@ export const fetchParcelOutItems = async () => {
       timeOut: item.time_out,
       shipping_mode: item.shipping_mode,
       client_name: item.client_name,
+      description: item.description,
       price: item.price,
       category: item.category,
     }));
@@ -38,6 +39,7 @@ export const addParcelOutItemHelper = async ({
   time_out,
   shipping_mode,
   client_name,
+  description,
   price,
   category,
 }) => {
@@ -50,6 +52,7 @@ export const addParcelOutItemHelper = async ({
       time_out,
       shipping_mode,
       client_name,
+      description: description || null,
       price:
         price === "" || price === null || price === undefined
           ? null
@@ -72,6 +75,7 @@ export const addParcelOutItemHelper = async ({
       timeOut: data.time_out,
       shipping_mode: data.shipping_mode,
       client_name: data.client_name,
+      description: data.description,
       price: data.price,
       category: data.category,
     };
@@ -92,6 +96,7 @@ export const handleAddParcelOut = async ({
   timeAMPM,
   shipping_mode,
   client_name,
+  description,
   price,
   category,
 }) => {
@@ -103,6 +108,7 @@ export const handleAddParcelOut = async ({
     time_out,
     shipping_mode,
     client_name,
+    description,
     price,
     category,
   });
@@ -131,6 +137,7 @@ export const updateParcelOutItemHelper = async (id, updates = {}) => {
       timeOut: data.time_out,
       shipping_mode: data.shipping_mode,
       client_name: data.client_name,
+      description: data.description,
       price: data.price,
       category: data.category,
     };

@@ -46,6 +46,7 @@ export default function Page() {
   const [timeAMPM, setTimeAMPM] = useState("AM");
   const [shippingMode, setShippingMode] = useState("");
   const [clientName, setClientName] = useState("");
+  const [remarks, setRemarks] = useState("");
   const [price, setPrice] = useState("");
   const [category, setCategory] = useState(CATEGORIES.OTHERS);
   const [selectedFilter, setSelectedFilter] = useState("");
@@ -239,7 +240,11 @@ export default function Page() {
       return;
     }
 
-    // Add each row
+    if (isSingleInput && !clientName?.trim()) {
+      alert("Please fill in the Client Name.");
+      return;
+    }
+
     let successCount = 0;
     for (const row of rowsToProcess) {
       const quantityToAdd = parseInt(row.quantity);
@@ -254,6 +259,7 @@ export default function Page() {
         timeAMPM,
         shipping_mode: row.shippingMode || shippingMode,
         client_name: row.clientName || clientName,
+        description: row.description || remarks,
         price: rowTotalPrice,
         category: row.category || category,
       });
@@ -296,6 +302,7 @@ export default function Page() {
     setTimeAMPM("AM");
     setShippingMode("");
     setClientName("");
+    setRemarks("");
     setPrice("");
     setCategory(CATEGORIES.OTHERS);
   };
@@ -534,7 +541,7 @@ export default function Page() {
               </div>
 
               {/* Row 2: Category, Shipping Mode, Client Name, Price */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
                 {/* Category */}
                 <div className="flex flex-col">
                   <label className={getClassName(
@@ -598,7 +605,7 @@ export default function Page() {
                     "text-xs font-medium mb-1.5 text-gray-300",
                     "text-xs font-medium mb-1.5 text-gray-700"
                   )}>
-                    Client Name
+                    Client Name *
                   </label>
                   <input
                     type="text"
@@ -609,6 +616,28 @@ export default function Page() {
                       darkMode,
                       "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#EF4444] focus:border-[#EF4444] bg-[#111827] text-white",
                       "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#DC2626] focus:border-[#DC2626] bg-white text-black"
+                    )}
+                    required
+                  />
+                </div>
+
+                {/* Remarks */}
+                <div className="flex flex-col">
+                  <label className={getClassName(
+                    darkMode,
+                    "text-xs font-medium mb-1.5 text-gray-300",
+                    "text-xs font-medium mb-1.5 text-gray-700"
+                  )}>
+                    Remarks
+                  </label>
+                  <textarea
+                    value={remarks}
+                    onChange={(e) => setRemarks(e.target.value)}
+                    placeholder="Enter remarks"
+                    className={getClassName(
+                      darkMode,
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#374151] focus:ring-[#EF4444] focus:border-[#EF4444] bg-[#111827] text-white min-h-[90px] resize-none",
+                      "border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 transition-all border-[#D1D5DB] focus:ring-[#DC2626] focus:border-[#DC2626] bg-white text-black min-h-[90px] resize-none"
                     )}
                   />
                 </div>
@@ -825,6 +854,7 @@ export default function Page() {
                         "Time Out",
                         "Shipping",
                         "Client",
+                        "Remarks",
                         "Price",
                       ].map(
                         (head) => (
@@ -963,6 +993,13 @@ export default function Page() {
                             }`}
                           >
                             {item.client_name || "-"}
+                          </td>
+                          <td
+                            className={`px-4 sm:px-6 py-3 sm:py-4 text-center align-middle text-sm sm:text-base ${
+                              darkMode ? "text-[#D1D5DB]" : "text-[#374151]"
+                            }`}
+                          >
+                            {item.description || "-"}
                           </td>
                           <td
                             className={`px-4 sm:px-6 py-3 sm:py-4 text-center align-middle text-sm sm:text-base ${

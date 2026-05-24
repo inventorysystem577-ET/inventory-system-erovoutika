@@ -41,6 +41,7 @@ export default function ProductOutPage() {
   const [timeAMPM, setTimeAMPM] = useState("AM");
   const [shippingMode, setShippingMode] = useState("");
   const [clientName, setClientName] = useState("");
+  const [remarks, setRemarks] = useState("");
   const [unitPrice, setUnitPrice] = useState("");
   const [totalPrice, setTotalPrice] = useState(0);
   const [selectedMonth, setSelectedMonth] = useState(
@@ -176,6 +177,11 @@ export default function ProductOutPage() {
       return;
     }
 
+    if (!clientName?.trim()) {
+      alert("Please fill in the Client Name.");
+      return;
+    }
+
     let hour = parseInt(timeHour);
     if (timeAMPM === "PM" && hour !== 12) hour += 12;
     if (timeAMPM === "AM" && hour === 12) hour = 0;
@@ -189,6 +195,7 @@ export default function ProductOutPage() {
       {
         shipping_mode: shippingMode,
         client_name: clientName,
+        description: remarks || null,
         price: totalPrice,
       },
     );
@@ -224,6 +231,7 @@ export default function ProductOutPage() {
       setTimeAMPM(ampm);
       setShippingMode("");
       setClientName("");
+      setRemarks("");
       setUnitPrice("");
 
       loadItems();
@@ -274,6 +282,11 @@ export default function ProductOutPage() {
 
     if (!date) {
       setBulkOutError("Please select a date");
+      return;
+    }
+
+    if (!clientName?.trim()) {
+      setBulkOutError("Please fill in the Client Name.");
       return;
     }
 
@@ -333,6 +346,7 @@ export default function ProductOutPage() {
     const result = await handleAddMultipleProductsOut(payload, {
       shipping_mode: shippingMode,
       client_name: clientName,
+      description: bulkRemarks || null,
     });
 
     if (validationErrors.length > 0) {
@@ -353,6 +367,7 @@ export default function ProductOutPage() {
     }
 
     setBulkOutItems([{ product_name: "", quantity: 1, unitPrice: "" }]);
+    setBulkRemarks("");
     setIsBulkOutSubmitting(false);
     loadItems();
     loadAvailableProducts();
@@ -704,7 +719,7 @@ export default function ProductOutPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-4">
                 <div>
                   <label
                     className={`block text-sm font-medium mb-2 ${darkMode ? "text-[#D1D5DB]" : "text-[#374151]"}`}
@@ -733,7 +748,7 @@ export default function ProductOutPage() {
                   <label
                     className={`block text-sm font-medium mb-2 ${darkMode ? "text-[#D1D5DB]" : "text-[#374151]"}`}
                   >
-                    Client Name
+                    Client Name *
                   </label>
                   <input
                     type="text"
@@ -741,6 +756,24 @@ export default function ProductOutPage() {
                     onChange={(e) => setClientName(e.target.value)}
                     placeholder="Client name"
                     className={`border rounded-lg px-4 py-2 w-full focus:outline-none focus:ring-2 ${
+                      darkMode
+                        ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
+                        : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
+                    }`}
+                    required
+                  />
+                </div>
+                <div>
+                  <label
+                    className={`block text-sm font-medium mb-2 ${darkMode ? "text-[#D1D5DB]" : "text-[#374151]"}`}
+                  >
+                    Remarks
+                  </label>
+                  <textarea
+                    value={remarks}
+                    onChange={(e) => setRemarks(e.target.value)}
+                    placeholder="Enter remarks"
+                    className={`border rounded-lg px-4 py-2 w-full focus:outline-none focus:ring-2 min-h-[90px] resize-none ${
                       darkMode
                         ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
                         : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
@@ -840,6 +873,26 @@ export default function ProductOutPage() {
                     <Plus className="w-4 h-4 inline-block mr-1" />
                     Add Row
                   </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-6 mb-4">
+                <div>
+                  <label
+                    className={`block text-sm font-medium mb-2 ${darkMode ? "text-[#D1D5DB]" : "text-[#374151]"}`}
+                  >
+                    Remarks
+                  </label>
+                  <textarea
+                    value={bulkRemarks}
+                    onChange={(e) => setBulkRemarks(e.target.value)}
+                    placeholder="Enter remarks for all rows"
+                    className={`border rounded-lg px-4 py-2 w-full focus:outline-none focus:ring-2 min-h-[90px] resize-none ${
+                      darkMode
+                        ? "border-[#374151] focus:ring-[#3B82F6] bg-[#111827] text-white"
+                        : "border-[#D1D5DB] focus:ring-[#1E3A8A] bg-white text-black"
+                    }`}
+                  />
                 </div>
               </div>
 
