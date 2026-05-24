@@ -106,7 +106,8 @@ export default function ProductInPage() {
       (item) => normalizeName(item.product_name) === normalizeName(productName),
     );
     if (!matching) return "";
-    return matching.product_code || buildProductCode(matching);
+    // If an existing product has no code, leave the code field blank instead of auto-generating
+    return matching.product_code || "";
   };
 
   useEffect(() => {

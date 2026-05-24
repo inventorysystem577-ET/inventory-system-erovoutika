@@ -149,7 +149,8 @@ function PageContent() {
       (item) => normalizeName(item.name) === normalizeName(itemName),
     );
     if (!matching) return "";
-    return matching.item_code || buildProductCode(matching, "CMP");
+    // If an existing parcel/item has no item_code, leave the code field blank instead of auto-generating
+    return matching.item_code || "";
   };
 
   const updateParcelRow = (id, field, value) => {

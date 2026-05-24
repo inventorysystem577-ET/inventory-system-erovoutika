@@ -66,8 +66,8 @@ const MultipleProductInput = ({
         newProducts[index].description = existingItem.description || "";
         newProducts[index].category =
           existingItem.category || PRODUCT_CATEGORIES.OTHER;
-        newProducts[index].productCode =
-          existingItem.product_code || buildProductCode(existingItem);
+        // If existing product has no product_code, leave productCode blank instead of auto-generating
+        newProducts[index].productCode = existingItem.product_code || "";
       } else {
         newProducts[index].productCode = "";
       }
