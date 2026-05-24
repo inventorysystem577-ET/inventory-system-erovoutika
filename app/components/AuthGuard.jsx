@@ -5,8 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "../hook/useAuth";
 import { isAdminRole } from "../utils/roleHelper";
 
-// Pages staff can access (everything except admin panel)
-const STAFF_ALLOWED_PATHS = [
+// Page path prefixes staff can access (everything except admin panel)
+const STAFF_ALLOWED_PATH_PREFIXES = [
   "/view/product-in",
   "/view/product-out",
   "/view/item-transfer",
@@ -16,8 +16,8 @@ const STAFF_ALLOWED_PATHS = [
   "/view/dashboard",
 ];
 
-// Admin-only pages
-const ADMIN_ONLY_PATHS = [
+// Admin-only page prefixes
+const ADMIN_ONLY_PATH_PREFIXES = [
   "/view/admin-panel",
   "/view/user-approvals",
   "/view/admin-Crud-Products",
@@ -43,12 +43,12 @@ export default function AuthGuard({ children, darkMode = false }) {
     }
     if (isAdmin) return;
     // Staff: block admin-only pages
-    if (ADMIN_ONLY_PATHS.includes(pathname)) {
+    if (ADMIN_ONLY_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
       router.replace("/view/dashboard");
       return;
     }
     // Staff: allow listed pages, redirect others to dashboard
-    if (!STAFF_ALLOWED_PATHS.includes(pathname)) {
+    if (!STAFF_ALLOWED_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
       router.replace("/view/dashboard");
     }
   }, [initialized, authLoading, userEmail, isAdmin, isApproved, pathname, router]);
@@ -73,7 +73,7 @@ export default function AuthGuard({ children, darkMode = false }) {
 
   if (!userEmail) return null;
   if (!isApproved) return null;
-  if (!isAdmin && ADMIN_ONLY_PATHS.includes(pathname)) return null;
+  if (!isAdmin && ADMIN_ONLY_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return null;
 
   return <>{children}</>;
 }
