@@ -282,6 +282,16 @@ function PageContent() {
       });
       if (result && result.newItem) {
         successCount++;
+        
+        // Mark as recently added for inventory sorting
+        try {
+          const recentlyAdded = JSON.parse(sessionStorage.getItem('recentlyAddedParcelIds') || '[]');
+          recentlyAdded.push({ id: result.newItem.id, timestamp: Date.now() });
+          sessionStorage.setItem('recentlyAddedParcelIds', JSON.stringify(recentlyAdded));
+        } catch (error) {
+          console.error('Error saving recently added item:', error);
+        }
+        
         await logActivity({
           userId: userEmail || null,
           userName: displayName || userEmail || "Unknown User",

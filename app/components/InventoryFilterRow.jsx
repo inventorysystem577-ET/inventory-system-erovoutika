@@ -87,7 +87,7 @@ export default function InventoryFilterRow({ darkMode, lightFocusClass, filters 
         <label
           className={`block text-sm font-medium mb-2 ${darkMode ? "text-gray-300" : "text-gray-700"}`}
         >
-          Sort by Date:
+          Sort by:
         </label>
         <select
           value={sortValue}
@@ -98,9 +98,12 @@ export default function InventoryFilterRow({ darkMode, lightFocusClass, filters 
               : `border-[#D1D5DB] ${lightFocusClass} bg-white text-black`
           }`}
         >
-          <option value="default">Default</option>
-          <option value="newest">Newest to Oldest</option>
-          <option value="oldest">Oldest to Newest</option>
+          <option value="quantity-desc">Quantity (High to Low)</option>
+          <option value="quantity-asc">Quantity (Low to High)</option>
+          <option value="name-asc">Name (A-Z)</option>
+          <option value="name-desc">Name (Z-A)</option>
+          <option value="date-desc">Date (Newest to Oldest)</option>
+          <option value="date-asc">Date (Oldest to Newest)</option>
         </select>
       </div>
     </div>

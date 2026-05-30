@@ -155,8 +155,10 @@ export default function Page() {
   const [productSearch, setProductSearch] = useState("");
   const [parcelCategoryFilter, setParcelCategoryFilter] = useState("all");
   const [productCategoryFilter, setProductCategoryFilter] = useState("all");
-  const [parcelSortOrder, setParcelSortOrder] = useState("default");
-  const [productSortOrder, setProductSortOrder] = useState("default");
+  const [parcelSortOrder, setParcelSortOrder] = useState("quantity-desc");
+  const [productSortOrder, setProductSortOrder] = useState("quantity-desc");
+  const [recentlyAddedParcelIds, setRecentlyAddedParcelIds] = useState(new Set());
+  const [recentlyAddedProductIds, setRecentlyAddedProductIds] = useState(new Set());
   const [parcelCurrentPage, setParcelCurrentPage] = useState(1);
   const [productCurrentPage, setProductCurrentPage] = useState(1);
   const { role, displayName, userEmail, loading: authLoading, initialized: authInitialized } = useAuth();
@@ -585,6 +587,26 @@ export default function Page() {
     if (!authInitialized) return;
     loadItems();
     loadDefectiveItems();
+    
+    // Load recently added items from sessionStorage
+    try {
+      const recentlyAddedParcel = JSON.parse(sessionStorage.getItem('recentlyAddedParcelIds') || '[]');
+      const recentlyAddedProduct = JSON.parse(sessionStorage.getItem('recentlyAddedProductIds') || '[]');
+      
+      // Filter out items older than 5 minutes
+      const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+      const validParcelIds = recentlyAddedParcel.filter(item => item.timestamp > fiveMinutesAgo).map(item => item.id);
+      const validProductIds = recentlyAddedProduct.filter(item => item.timestamp > fiveMinutesAgo).map(item => item.id);
+      
+      setRecentlyAddedParcelIds(new Set(validParcelIds));
+      setRecentlyAddedProductIds(new Set(validProductIds));
+      
+      // Clear expired items from sessionStorage
+      sessionStorage.setItem('recentlyAddedParcelIds', JSON.stringify(recentlyAddedParcel.filter(item => item.timestamp > fiveMinutesAgo)));
+      sessionStorage.setItem('recentlyAddedProductIds', JSON.stringify(recentlyAddedProduct.filter(item => item.timestamp > fiveMinutesAgo)));
+    } catch (error) {
+      console.error('Error loading recently added items:', error);
+    }
   }, [authInitialized]);
 
   useEffect(() => {
@@ -718,23 +740,51 @@ export default function Page() {
     return 0;
   };
 
-  const sortByHistoryDate = (items = [], sortOrder = "default") => {
-    if (sortOrder === "default") return [...items];
+  const sortByHistoryDate = (items = [], sortOrder = "quantity-desc", recentlyAddedIds = new Set()) => {
     return [...items].sort((a, b) => {
-      if (sortOrder === "newest") {
-        return getHistoryTimestamp(b) - getHistoryTimestamp(a);
+      const idA = a?.id;
+      const idB = b?.id;
+      const isRecentlyAddedA = recentlyAddedIds.has(idA);
+      const isRecentlyAddedB = recentlyAddedIds.has(idB);
+
+      // Prioritize recently added items at the top
+      if (isRecentlyAddedA && !isRecentlyAddedB) return -1;
+      if (!isRecentlyAddedA && isRecentlyAddedB) return 1;
+
+      const nameA = (a?.name || a?.product_name || "").toLowerCase();
+      const nameB = (b?.name || b?.product_name || "").toLowerCase();
+      const qtyA = Number(a?.quantity || 0);
+      const qtyB = Number(b?.quantity || 0);
+      const timestampA = getHistoryTimestamp(a);
+      const timestampB = getHistoryTimestamp(b);
+
+      if (sortOrder === "quantity-desc") {
+        return qtyB - qtyA;
       }
-      if (sortOrder === "oldest") {
-        return getHistoryTimestamp(a) - getHistoryTimestamp(b);
+      if (sortOrder === "quantity-asc") {
+        return qtyA - qtyB;
+      }
+      if (sortOrder === "name-asc") {
+        return nameA.localeCompare(nameB);
+      }
+      if (sortOrder === "name-desc") {
+        return nameB.localeCompare(nameA);
+      }
+      if (sortOrder === "date-desc") {
+        return timestampB - timestampA;
+      }
+      if (sortOrder === "date-asc") {
+        return timestampA - timestampB;
       }
       return 0;
     });
   };
 
-  const sortedParcelItems = sortByHistoryDate(filteredParcelItems, parcelSortOrder);
+  const sortedParcelItems = sortByHistoryDate(filteredParcelItems, parcelSortOrder, recentlyAddedParcelIds);
   const sortedProductItems = sortByHistoryDate(
     filteredProductItems,
     productSortOrder,
+    recentlyAddedProductIds,
   );
 
   const PARCEL_ITEMS_PER_PAGE = 10;

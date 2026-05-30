@@ -543,6 +543,17 @@ export default function ProductInPage() {
     await loadItems();
     await loadStockInItems();
 
+    // Mark as recently added for inventory sorting
+    if (result?.data?.[0]?.id) {
+      try {
+        const recentlyAdded = JSON.parse(sessionStorage.getItem('recentlyAddedProductIds') || '[]');
+        recentlyAdded.push({ id: result.data[0].id, timestamp: Date.now() });
+        sessionStorage.setItem('recentlyAddedProductIds', JSON.stringify(recentlyAdded));
+      } catch (error) {
+        console.error('Error saving recently added item:', error);
+      }
+    }
+
     await logActivity({
       userId: userEmail || null,
       userName: displayName || userEmail || "Unknown User",
@@ -830,6 +841,17 @@ export default function ProductInPage() {
 
     await loadItems();
     await loadStockInItems();
+
+    // Mark as recently added for inventory sorting
+    if (result?.data?.[0]?.id) {
+      try {
+        const recentlyAdded = JSON.parse(sessionStorage.getItem('recentlyAddedProductIds') || '[]');
+        recentlyAdded.push({ id: result.data[0].id, timestamp: Date.now() });
+        sessionStorage.setItem('recentlyAddedProductIds', JSON.stringify(recentlyAdded));
+      } catch (error) {
+        console.error('Error saving recently added item:', error);
+      }
+    }
 
     await logActivity({
       userId: userEmail || null,
